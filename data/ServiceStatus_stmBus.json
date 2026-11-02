@@ -1,0 +1,88 @@
+{
+  "basePath" : "/pub/od/gtfs-rt/ic/v2",
+  "host" : "api.stm.info",
+  "info" : {
+    "description" : "Retourne les horaires et les positions des autobus de la STM en temps réel",
+    "title" : "Données Ouverte iBUS - GTFS-Realtime (v2)",
+    "version" : "2.0.0"
+  },
+  "paths" : {
+    "/tripUpdates" : {
+      "get" : {
+        "description" : "null",
+        "operationId" : "tripUpdates",
+        "parameters" : [ ],
+        "produces" : [ "application/x-protobuf" ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          },
+          "400" : {
+            "description" : "Bad Request / Organization level rate limit and/or quota exceeded"
+          },
+          "404" : {
+            "description" : "Not Found"
+          },
+          "429" : {
+            "description" : "API level rate limit/or quota exceeded"
+          },
+          "500" : {
+            "description" : "Internal Error"
+          },
+          "503" : {
+            "description" : "Service Unavailable"
+          }
+        },
+        "security" : [ {
+          "portal_api_key" : [ ]
+        } ],
+        "summary" : "Obtenir les horaires en temps réel",
+        "tags" : [ "Horaires" ]
+      },
+      "parameters" : [ ]
+    },
+    "/vehiclePositions" : {
+      "get" : {
+        "description" : "null",
+        "operationId" : "vehiclePositions",
+        "parameters" : [ ],
+        "produces" : [ "application/x-protobuf" ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          },
+          "400" : {
+            "description" : "Bad Request / Organization level rate limit and/or quota exceeded"
+          },
+          "404" : {
+            "description" : "Not Found"
+          },
+          "429" : {
+            "description" : "API level rate limit/or quota exceeded"
+          },
+          "500" : {
+            "description" : "Internal Error"
+          },
+          "503" : {
+            "description" : "Service Unavailable"
+          }
+        },
+        "security" : [ {
+          "portal_api_key" : [ ]
+        } ],
+        "summary" : "Obtenir le positionnement des bus en temps réel",
+        "tags" : [ "Positions" ]
+      },
+      "parameters" : [ ]
+    }
+  },
+  "schemes" : [ "https" ],
+  "securityDefinitions" : {
+    "portal_api_key" : {
+      "in" : "header",
+      "name" : "apiKey",
+      "type" : "apiKey"
+    }
+  },
+  "swagger" : "2.0"
+}

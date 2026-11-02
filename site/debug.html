@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>STM service-status debug</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1.5rem; font-size: 14px; color: #222; }
+    h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+    .controls { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin: .75rem 0; }
+    #summary { background: #f4f4f4; padding: .75rem 1rem; border-radius: 4px; }
+    #summary table { border-collapse: collapse; }
+    #summary td { padding: 1px 12px 1px 0; vertical-align: top; }
+    table.alerts { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    table.alerts th, table.alerts td { border: 1px solid #ccc; padding: 6px; vertical-align: top; text-align: left; }
+    table.alerts th { background: #eee; position: sticky; top: 0; }
+    tr.metro { background: #eef8ee; }
+    pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+    .lang { color: #888; font-size: 11px; }
+    .error { color: #b00; font-weight: bold; }
+    .muted { color: #888; }
+  </style>
+</head>
+<body>
+  <h1>STM service-status debug</h1>
+  <p class="muted">Shows the raw response from <code>/api/stm/service-status</code> (passed through unchanged by server.js),
+    next to what app.js would make of each alert. <a href="index.html">Back to the map</a></p>
+
+  <div class="controls">
+    <button id="reload">Fetch again</button>
+    <label>Show:
+      <select id="filter">
+        <option value="all">All alerts</option>
+        <option value="metro">Only alerts app.js maps to a metro line</option>
+        <option value="shown">Only alerts shown on the map (metro and active now)</option>
+        <option value="unmatched">Only alerts with no metro line</option>
+      </select>
+    </label>
+    <label>Search: <input id="search" placeholder="text, route, stop..." /></label>
+  </div>
+
+  <div id="summary">Loading...</div>
+  <table class="alerts">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Header (all languages)</th>
+        <th>Description (all languages)</th>
+        <th>Active periods</th>
+        <th>informed_entities (raw)</th>
+        <th>Lines from app.js logic</th>
+        <th>Other fields</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <h2>Full raw response</h2>
+  <details><summary>Show JSON</summary><pre id="raw"></pre></details>
+
+  <script>
+    const STM_STATUS_URL = '/api/stm/service-status';
+
+    // Copied from app.js so this page shows what the map would do. Keep in sync if app.js changes.
+    const lineColours = { Green: '#00B300', Orange: '#D95700', Yellow: '#FFD900', Blue: '#0095E6' };
+    const routeLines = { '1': 'Green', '2': 'Orange', '4': 'Yellow', '5': 'Blue' };
+
+    function textFor(entries) {
+      if (!Array.isArray(entries)) { return ''; }
+      const entry = entries.find(function (item) {
+        return item && item.text && String(item.language || '').toLowerCase().startsWith('en');
+      }) || entries.find(function (item) { return item && item.text; });
+      return entry ? String(entry.text) : '';
+    }
+
+    function linesForAlert(alert) {
+      const entities = Array.isArray(alert.informed_entities) ? alert.informed_entities : [];
+      const lines = new Set();
+      entities.forEach(function (entity) {
+        if (!entity) { return; }
+        const route = String(entity.route_short_name || entity.route_id || '').trim();
+        const routeNumber = route.replace(/^0+/, '');
+        if (routeLines[routeNumber]) { lines.add(routeLines[routeNumber]); }
+        Object.keys(lineColours).forEach(function (line) {
+          if (route.toLowerCase().includes(line.toLowerCase())) { lines.add(line); }
+        });
+      });
+      return Array.from(lines);
+    }
+    function isActiveNow(alert) {
+      const periods = [].concat(alert.active_periods || []);
+      if (!periods.length) { return true; }
+      const now = Date.now() / 1000;
+      return periods.some(function (p) {
+        return (!p.start || p.start <= now) && (!p.end || now <= p.end);
+      });
+    }
+    // End of copy.
+
+    let data = null;
+
+    function cell(content) {
+      const td = document.createElement('td');
+      if (content instanceof Node) { td.appendChild(content); } else { td.textContent = content; }
+      return td;
+    }
+
+    function pre(value) {
+      const el = document.createElement('pre');
+      el.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 1);
+      return el;
+    }
+
+    function allLanguages(entries) {
+      const wrap = document.createElement('div');
+      if (!Array.isArray(entries) || !entries.length) {
+        wrap.innerHTML = '<span class="muted">(none)</span>';
+        return wrap;
+      }
+      entries.forEach(function (entry) {
+        const p = document.createElement('div');
+        const lang = document.createElement('span');
+        lang.className = 'lang';
+        lang.textContent = '[' + (entry && entry.language || '?') + '] ';
+        p.append(lang, document.createTextNode(entry && entry.text || ''));
+        wrap.appendChild(p);
+      });
+      return wrap;
+    }
+
+    function formatTime(value) {
+      if (value === undefined || value === null || value === '') { return '–'; }
+      const n = Number(value);
+      const date = isNaN(n) ? new Date(value) : new Date(n < 1e12 ? n * 1000 : n);
+      return isNaN(date) ? String(value) : date.toLocaleString();
+    }
+
+    function periods(alert) {
+      const list = alert.active_periods || alert.active_period;
+      if (!list) { return 'none given'; }
+      return (Array.isArray(list) ? list : [list]).map(function (p) {
+        return formatTime(p.start) + ' → ' + formatTime(p.end);
+      }).join('\n');
+    }
+
+    function countBy(items, keyFn) {
+      const counts = {};
+      items.forEach(function (item) {
+        [].concat(keyFn(item)).forEach(function (key) { counts[key] = (counts[key] || 0) + 1; });
+      });
+      return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })
+        .map(function (k) { return k + ': ' + counts[k]; }).join(', ') || '–';
+    }
+
+    function renderSummary(response, alerts) {
+      const metro = alerts.filter(function (a) { return linesForAlert(a).length; });
+      const rows = [
+        ['HTTP status', response.status + ' ' + response.statusText],
+        ['Fetched at', new Date().toLocaleTimeString()],
+        ['Top-level keys', Object.keys(data).join(', ')],
+        ['Total alerts', alerts.length],
+        ['Mapped to a metro line by app.js', metro.length],
+        ['Not mapped (bus notices, hidden on the map)', alerts.length - metro.length],
+        ['Shown on the map (metro line and active now)', metro.filter(isActiveNow).length],
+        ['Lines found', countBy(metro, linesForAlert)],
+        ['Keys used in informed_entities', countBy(alerts, function (a) {
+          return (a.informed_entities || []).flatMap(function (e) { return Object.keys(e || {}); })
+            .filter(function (k, i, arr) { return arr.indexOf(k) === i; });
+        })],
+        ['Alert fields present', countBy(alerts, function (a) { return Object.keys(a); })],
+        ['English headers, most common', countBy(alerts, function (a) { return textFor(a.header_texts) || '(empty)'; })
+          .split(', ').slice(0, 8).join(' | ')]
+      ];
+      const table = document.createElement('table');
+      rows.forEach(function (r) {
+        const tr = document.createElement('tr');
+        tr.append(cell(r[0]), cell(String(r[1])));
+        tr.firstChild.style.fontWeight = 'bold';
+        table.appendChild(tr);
+      });
+      document.getElementById('summary').replaceChildren(table);
+    }
+
+    function renderRows() {
+      const tbody = document.getElementById('rows');
+      tbody.replaceChildren();
+      if (!data || !Array.isArray(data.alerts)) { return; }
+      const filter = document.getElementById('filter').value;
+      const search = document.getElementById('search').value.trim().toLowerCase();
+      let shown = 0;
+
+      data.alerts.forEach(function (alert, i) {
+        const lines = linesForAlert(alert);
+        if (filter === 'metro' && !lines.length) { return; }
+        if (filter === 'unmatched' && lines.length) { return; }
+        if (filter === 'shown' && !(lines.length && isActiveNow(alert))) { return; }
+        if (search && JSON.stringify(alert).toLowerCase().indexOf(search) === -1) { return; }
+        shown += 1;
+
+        const others = {};
+        Object.keys(alert).forEach(function (k) {
+          if (['header_texts', 'description_texts', 'informed_entities', 'active_periods', 'active_period'].indexOf(k) === -1) {
+            others[k] = alert[k];
+          }
+        });
+
+        const tr = document.createElement('tr');
+        if (lines.length) { tr.className = 'metro'; }
+        tr.append(
+          cell(String(i)),
+          cell(allLanguages(alert.header_texts)),
+          cell(allLanguages(alert.description_texts)),
+          cell(pre(periods(alert))),
+          cell(pre(alert.informed_entities || '(missing)')),
+          cell(lines.length ? lines.join(', ') : '—'),
+          cell(Object.keys(others).length ? pre(others) : '')
+        );
+        tbody.appendChild(tr);
+      });
+
+      if (!shown) {
+        const tr = document.createElement('tr');
+        const td = cell('No alerts match this filter.');
+        td.colSpan = 7;
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    }
+
+    function load() {
+      document.getElementById('summary').textContent = 'Loading...';
+      document.getElementById('rows').replaceChildren();
+      fetch(STM_STATUS_URL, { cache: 'no-store' })
+        .then(function (response) {
+          return response.text().then(function (body) {
+            document.getElementById('raw').textContent = body;
+            try {
+              data = JSON.parse(body);
+              document.getElementById('raw').textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+              throw new Error('Response was not JSON (HTTP ' + response.status + '). See raw response below.');
+            }
+            if (!response.ok) { throw new Error(data.error || 'HTTP ' + response.status); }
+            if (!Array.isArray(data.alerts)) { throw new Error('Response has no "alerts" array. See raw response below.'); }
+            renderSummary(response, data.alerts);
+            renderRows();
+          });
+        })
+        .catch(function (error) {
+          const p = document.createElement('p');
+          p.className = 'error';
+          p.textContent = error.message;
+          document.getElementById('summary').replaceChildren(p);
+          console.error(error);
+        });
+    }
+
+    document.getElementById('reload').addEventListener('click', load);
+    document.getElementById('filter').addEventListener('change', renderRows);
+    document.getElementById('search').addEventListener('input', renderRows);
+    load();
+  </script>
+</body>
+</html>

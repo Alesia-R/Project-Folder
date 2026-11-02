@@ -1,0 +1,69 @@
+metro_id,metro_name,lines,lat,lon
+M118,Angrignon,Green,45.446397,-73.603293
+M120,Monk,Green,45.451166,-73.593265
+M122,Jolicoeur,Green,45.456783,-73.581991
+M124,Verdun,Green,45.459432,-73.571654
+M126,De l'Église,Green,45.461911,-73.567107
+M128,LaSalle,Green,45.470631,-73.566281
+M130,Charlevoix,Green,45.478467,-73.569366
+M132,Lionel-Groulx,Green / Orange,45.482818,-73.579721
+M134,Atwater,Green,45.490038,-73.585731
+M136,Guy-Concordia,Green,45.495692,-73.57925
+M138,Peel,Green,45.500895,-73.57471
+M140,McGill,Green,45.504137,-73.571793
+M142,Place-des-Arts,Green,45.508173,-73.568313
+M144,Saint-Laurent,Green,45.51059,-73.56534
+M146,Berri-UQAM,Green / Orange / Yellow,45.514852,-73.560106
+M148,Beaudry,Green,45.518971,-73.55591
+M150,Papineau,Green,45.523717,-73.552073
+M152,Frontenac,Green,45.533133,-73.552158
+M154,Préfontaine,Green,45.54177,-73.554543
+M156,Joliette,Green,45.546819,-73.551427
+M158,Pie-IX,Green,45.553658,-73.551696
+M160,Viau,Green,45.560976,-73.54703
+M162,Assomption,Green,45.569167,-73.546845
+M164,Cadillac,Green,45.576859,-73.54669
+M166,Langelier,Green,45.582784,-73.543101
+M168,Radisson,Green,45.589614,-73.539753
+M170,Honoré-Beaugrand,Green,45.596495,-73.535053
+M222,Côte-Vertu,Orange,45.514244,-73.682766
+M224,Du Collège,Orange,45.508356,-73.673282
+M228,De la Savane,Orange,45.50033,-73.661537
+M230,Namur,Orange,45.494637,-73.652755
+M232,Plamondon,Orange,45.494609,-73.638166
+M234,Côte-Sainte-Catherine,Orange,45.49236,-73.633146
+M236,Snowdon,Orange / Blue,45.485244,-73.627806
+M238,Villa-Maria,Orange,45.479559,-73.61979
+M242,Vendôme,Orange,45.473861,-73.603865
+M244,Place-Saint-Henri,Orange,45.477363,-73.586418
+M248,Georges-Vanier,Orange,45.488962,-73.576435
+M250,Lucien-L'Allier,Orange,45.494814,-73.571215
+M252,Bonaventure,Orange,45.498053,-73.567129
+M254,Square-Victoria–OACI,Orange,45.501874,-73.563188
+M256,Place-d'Armes,Orange,45.506277,-73.559505
+M258,Champ-de-Mars,Orange,45.510031,-73.556462
+M262,Sherbrooke,Orange,45.518407,-73.568263
+M264,Mont-Royal,Orange,45.524716,-73.582234
+M266,Laurier,Orange,45.527388,-73.586858
+M268,Rosemont,Orange,45.531023,-73.598493
+M270,Beaubien,Orange,45.535236,-73.6044
+M272,Jean-Talon,Orange / Blue,45.539074,-73.613814
+M274,Jarry,Orange,45.543438,-73.628674
+M276,Crémazie,Orange,45.545972,-73.63887
+M278,Sauvé,Orange,45.550819,-73.65593
+M280,Henri-Bourassa,Orange,45.55522,-73.668199
+M282,Cartier,Orange,45.560398,-73.681719
+M286,De la Concorde,Orange,45.560544,-73.709337
+M288,Montmorency,Orange,45.558434,-73.722423
+M452,Jean-Drapeau,Yellow,45.512335,-73.532703
+M454,Longueuil-Université de Sherbrooke,Yellow,45.524574,-73.522036
+M534,Côte-des-Neiges,Blue,45.496808,-73.62339
+M536,Université-de-Montréal,Blue,45.503671,-73.618478
+M538,Édouard-Montpetit,Blue,45.51022,-73.612344
+M540,Outremont,Blue,45.520363,-73.615012
+M542,Acadie,Blue,45.523467,-73.623211
+M544,Parc,Blue,45.530197,-73.624583
+M546,De Castelnau,Blue,45.535483,-73.619871
+M552,Fabre,Blue,45.547921,-73.607055
+M554,D'Iberville,Blue,45.553612,-73.602038
+M556,Saint-Michel,Blue,45.559708,-73.600167

@@ -1,0 +1,53 @@
+{
+  "basePath" : "/pub/od/i3/v2/messages",
+  "host" : "api.stm.info",
+  "info" : {
+    "description" : "Retourne l'état de service du réseau de transport de Montréal",
+    "title" : "Données Ouverte iBUS - État du Service (v2)",
+    "version" : "2.0.0"
+  },
+  "paths" : {
+    "/etatservice" : {
+      "get" : {
+        "description" : "null",
+        "parameters" : [ ],
+        "produces" : [ "application/json" ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          },
+          "400" : {
+            "description" : "Bad Request / Organization level rate limit and/or quota exceeded"
+          },
+          "404" : {
+            "description" : "Not Found"
+          },
+          "429" : {
+            "description" : "API level rate limit/or quota exceeded"
+          },
+          "500" : {
+            "description" : "Internal Error"
+          },
+          "503" : {
+            "description" : "Service Unavailable"
+          }
+        },
+        "security" : [ {
+          "portal_api_key" : [ ]
+        } ],
+        "summary" : "Retourne l'information sur l'état de service",
+        "tags" : [ "État du service" ]
+      },
+      "parameters" : [ ]
+    }
+  },
+  "schemes" : [ "https" ],
+  "securityDefinitions" : {
+    "portal_api_key" : {
+      "in" : "header",
+      "name" : "apiKey",
+      "type" : "apiKey"
+    }
+  },
+  "swagger" : "2.0"
+}

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Bixi or Métro? Alternate forms of transportation in Montréal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Bixi or Métro? Alternate forms of transportation in Montréal</h1>
+    <p id="status">Loading stations...</p>
+  </header>
+
+  <main>
+    <aside id="story">
+      <!-- STORY: my words. -->
+      <h2>Who it is for</h2>
+      <p>The average commuter in Montréal, especially in high-density areas where many types of transport come together.</p>
+
+      <h2>Why it matters</h2>
+      <p>Right now the average commuter cannot easily find out whether it is more convenient to take a Bixi or the metro for a short distance, especially when there are delays in service or bikes are running out.</p>
+      <p>Looking at the metro together with Bixi availability gives people faster access to real-time data, in one place, so they can pick the quickest option themselves.</p>
+
+      <h2>What you can do here</h2>
+      <p>Choose <strong>take a bike</strong> or <strong>return a bike</strong> (top right). Every Bixi station is coloured by how many bikes or free docks it has right now. Click a metro station (the coloured <strong>M</strong>) to see the Bixi bikes and docks within a 4-minute walk (300 m).</p>
+
+      <h2>Live STM service status</h2>
+      <p id="stm-updated" class="small">Loading STM service status...</p>
+      <div id="stm-alerts" aria-live="polite"></div>
+
+      <h2>What this is not</h2>
+      <p>This is not another routing app. It does not plan your trip; it shows live availability and STM service notices for short distances so you can decide.</p>
+
+      <h2>Sources</h2>
+      <p class="small">
+        Bixi stations and live availability: <a href="https://gbfs.velobixi.com/gbfs/gbfs.json">BIXI Montréal GBFS feed</a>
+        (<a href="https://www.donneesquebec.ca/recherche/fr/dataset/89fdc53c-cf70-485f-ab1a-9b10044d9f15">Données Québec listing</a>), © BIXI Montréal, Creative Commons Attribution.<br>
+        Metro stations: <a href="https://www.stm.info/en/about/developers">STM GTFS feed</a>
+        (<a href="https://www.donneesquebec.ca/recherche/fr/dataset/a0073997-3a02-4c34-8acf-758a2ee950f4">Données Québec listing</a>), © Société de transport de Montréal.<br>
+        Basemap: © OpenStreetMap contributors.
+      </p>
+    </aside>
+    <div id="map"></div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
