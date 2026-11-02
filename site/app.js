@@ -3,9 +3,11 @@
 
 const map = L.map('map', { preferCanvas: true }).setView([45.52, -73.6], 12);
 
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+// CARTO Positron: a quiet light-grey base map so the metro lines and Bixi dots stand out.
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
   maxZoom: 19,
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | Station data: <a href="https://bixi.com/en/open-data">BIXI Montréal</a>'
+  subdomains: 'abcd',
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a> | Station data: <a href="https://bixi.com/en/open-data">BIXI Montréal</a>'
 }).addTo(map);
 
 const STATUS_URL = 'https://gbfs.velobixi.com/gbfs/en/station_status.json';
@@ -412,16 +414,29 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), getJSON('../data/metro_st
     console.error(err);
   });
 
+// A map panel whose heading is a button: click it to fold the panel away and see more of the map.
+function collapsiblePanel(className, headingHTML, bodyHTML) {
+  const div = L.DomUtil.create('div', className);
+  div.innerHTML = '<button type="button" class="panel-toggle" aria-expanded="true">' + headingHTML +
+    '<i class="arrow" aria-hidden="true"></i></button><div class="panel-body">' + bodyHTML + '</div>';
+  const button = div.querySelector('.panel-toggle');
+  button.addEventListener('click', function () {
+    const collapsed = div.classList.toggle('collapsed');
+    button.setAttribute('aria-expanded', String(!collapsed));
+  });
+  L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.disableScrollPropagation(div);
+  return div;
+}
+
 function addControls() {
   // The toggle: bikes or docks.
   const toggle = L.control({ position: 'topright' });
   toggle.onAdd = function () {
-    const div = L.DomUtil.create('div', 'panel');
-    div.innerHTML = '<strong>I want to...</strong>' +
+    const div = collapsiblePanel('panel', '<strong>I want to...</strong>',
       '<label><input type="radio" name="mode" value="bikes" checked> take a bike</label>' +
       '<label><input type="radio" name="mode" value="docks"> return a bike</label>' +
-      '<hr><label><input type="checkbox" id="near-only"> Only stations near a metro (' + WALK_M + ' m)</label>';
-    L.DomEvent.disableClickPropagation(div);
+      '<hr><label><input type="checkbox" id="near-only"> Only stations near a metro (' + WALK_M + ' m)</label>');
     div.addEventListener('change', function (e) {
       if (e.target.id === 'near-only') {
         nearOnly = e.target.checked;
@@ -438,15 +453,14 @@ function addControls() {
 
   const legend = L.control({ position: 'bottomright' });
   legend.onAdd = function () {
-    const div = L.DomUtil.create('div', 'panel legend');
-    div.innerHTML = '<strong id="legend-title">Bikes available</strong>' + classes.map(function (c) {
-      return '<span style="background:' + c.colour + '"></span>' + c.label;
-    }).join('<br>') +
-      '<br><span class="metro-key">M</span>Metro station';
-    div.innerHTML += '<br><span class="down-key">M</span>Station affected by a disruption' +
+    return collapsiblePanel('panel legend', '<strong id="legend-title">Bikes available</strong>',
+      classes.map(function (c) {
+        return '<span style="background:' + c.colour + '"></span>' + c.label;
+      }).join('<br>') +
+      '<br><span class="metro-key">M</span>Metro station' +
+      '<br><span class="down-key">M</span>Station affected by a disruption' +
       '<br><span class="line-key"></span>Disrupted stretch of line' +
-      '<br><span class="line-key dashed"></span>Disruption, stations unknown';
-    return div;
+      '<br><span class="line-key dashed"></span>Disruption, stations unknown');
   };
   legend.addTo(map);
 }

@@ -33,3 +33,13 @@ main #map { flex: 1; height: auto; }
   #story { width: auto; border-right: 0; }
   main #map { height: 75vh; flex: none; }
 }
+
+/* Fold-away map panels: the heading is a button with an arrow */
+.panel-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.panel-toggle strong { display: inline; margin: 0; }
+.panel-toggle .arrow { width: 7px; height: 7px; border-right: 2px solid #555; border-bottom: 2px solid #555;
+  transform: rotate(45deg); margin: -3px 2px 0 0; transition: transform .15s; }
+.panel.collapsed .panel-toggle .arrow { transform: rotate(-135deg); margin-top: 3px; }
+.panel.collapsed .panel-body { display: none; }
+.panel-toggle:focus-visible { outline: 2px solid #1F2D5A; outline-offset: 2px; }

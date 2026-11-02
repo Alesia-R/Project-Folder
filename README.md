@@ -47,7 +47,7 @@ bixi-metro-mvp/
 |---|---|---|
 | Bixi stations and live availability | [BIXI Montréal GBFS feed], listed on [Données Québec](https://www.donneesquebec.ca/recherche/fr/dataset/89fdc53c-cf70-485f-ab1a-9b10044d9f15) | Creative Commons Attribution, © BIXI Montréal |
 | Metro stations and lines; live service status | [STM open data](https://www.stm.info/en/about/developers), listed on [Données Québec](https://www.donneesquebec.ca/recherche/fr/dataset/a0073997-3a02-4c34-8acf-758a2ee950f4) | CC BY 4.0, © Société de transport de Montréal |
-| Basemap | OpenStreetMap | © OpenStreetMap contributors, ODbL |
+| Basemap | CARTO Positron, built on OpenStreetMap data | © OpenStreetMap contributors (ODbL), © CARTO |
 
 ## Not in this iteration
 
