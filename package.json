@@ -1,0 +1,13 @@
+{
+  "name": "bixi-metro-mvp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live Bixi availability around Montréal metro stations",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --env-file=.env server.js"
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}

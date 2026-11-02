@@ -121,6 +121,9 @@ const server = http.createServer((request, response) => {
   });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+// On Render the server must accept outside connections; locally it stays private to this computer.
+const HOST = process.env.RENDER ? '0.0.0.0' : '127.0.0.1';
+
+server.listen(PORT, HOST, () => {
   console.log(`Map running at http://localhost:${PORT}`);
 });
