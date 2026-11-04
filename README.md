@@ -127,5 +127,3 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
   - "Identical links have the same purpose."
 
   I changed the sizing of the touch targets, and fixed the links. I also changed the basemap credit to be correct. 
-
-| 8. Accessibility audit | ... | ... |
