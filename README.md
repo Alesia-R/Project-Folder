@@ -74,3 +74,45 @@ bixi-metro-mvp/
 - neighbours answer: It would be nice if there was some way to connect the metro stops into actual lines so that it isnt just random stops. The visualisation would be better. 
 - Today I will fix: I changed the display first and organized them in a way that presents all the stops as connected per line. For example, all greens tops, conencted with a through green line. 
 Then, IF the metro station is down, I highlighted them in red, IF multiple sequential stations are down, I made the affected segment red. In the future, I will fix the bus data coming from the API to be connected to a busstop.sph in order to see the radius of metro stops that may also be down.  
+
+## A3 card and three tests
+ 1. 
+ 2. 
+ 3. 
+
+## Pre-flight report 
+(Lab 7) | Check | Result | What I did | 
+| --- | --- | --- | 
+| 1. Cold start | pass / fault: It passed, no red lines. 
+
+| 2. Read every label | 
+    1. de la Gauchetière / St-Alexandre
+    Capacity: 19 docks
+    Nearest metro: Square-Victoria–OACI (Orange), 136 m
+    No live data 
+
+    Some bixi stations (when grey) read 'no live data' in the popup. It is also in the legend already. 
+
+| 3. Ask twice | No issues. 
+
+| 4. The edge | No issues. 
+
+| 5. The data does not come | I blocked metro_stations.geojson data in Network and my entire map went blank. In the side panel, it just reads "Live STM service status. Loading STM service status..." and the title bar reads "Could not load the station files. Open the console (F12) for details." 
+  The console is reading error "app.js:420 TypeError: Failed to fetch
+    at getJSON (app.js:367:10)
+    at app.js:373:56" 
+
+    I made a change in app.js so that if the metro file crashes or if the bixi file crashes, instead of reading "Live STM service status
+    Loading STM service status..." in the status bar, the description clearly describes what is happening. 
+
+    The side bar now says "The sidebar says: "STM service status was not checked, because the map could not load its station data. Try reloading the page" if the bixi file fails. 
+
+    If the metro file fails, it reads "Checked at 5:52 PM. The metro station file did not load, so notices are listed here but not shown on the map."
+
+    I took "Open the console (F12) for details" out of the messages, since a commuter won't use it.
+
+| 6. On a phone (size view and my phone) | ... | ... | 
+
+| 7. Mouse in my pocket | ... | ... | 
+
+| 8. Accessibility audit | ... | ... |

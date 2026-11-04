@@ -163,6 +163,7 @@ function stationsFromText(text, line) {
   const order = lineOrder[line];
   const found = [];
   order.forEach(function (id, index) {
+    if (!metroById[id]) { return; }   // metro file did not load
     const name = metroById[id].feature.properties.metro_name;
     const variants = [name, name.split('–')[0]];   // "Square-Victoria–OACI" is often just "Square-Victoria"
     if (variants.some(function (v) { return text.indexOf(normalise(v)) > -1; })) { found.push(index); }
@@ -310,7 +311,8 @@ function loadMetroStatus() {
       renderMetroAlerts(metroAlerts);
       updateMetroMarkers();
       document.getElementById('stm-updated').textContent =
-        'Checked at ' + new Date().toLocaleTimeString();
+        'Checked at ' + new Date().toLocaleTimeString() + (metroLayer ? '' :
+          '. The metro station file did not load, so notices are listed here but not shown on the map.');
     })
     .catch(function (error) {
       metroAlerts = [];
@@ -353,7 +355,7 @@ function loadStatus() {
       data.data.stations.forEach(function (s) { status[s.station_id] = s; });
       restyle();
       document.getElementById('status').innerHTML = '<span id="count"></span>, live availability at ' +
-        new Date(data.last_updated * 1000).toLocaleTimeString();
+        new Date(data.last_updated * 1000).toLocaleTimeString() + metroNote();
       refilter();
     })
     .catch(function (err) {
@@ -363,6 +365,10 @@ function loadStatus() {
     });
 }
 
+function metroNote() {
+  return metroLayer ? '' : '. Metro stations could not be loaded';
+}
+
 function getJSON(url) {
   return fetch(url).then(function (response) {
     if (!response.ok) { throw new Error('HTTP ' + response.status + ' loading ' + url); }
@@ -370,13 +376,19 @@ function getJSON(url) {
   });
 }
 
-Promise.all([getJSON('../data/bixi_stations.geojson'), getJSON('../data/metro_stations.geojson')])
+// The metro file is optional: if it fails, the Bixi map still works, just without metro stations and lines.
+const metroFile = getJSON('../data/metro_stations.geojson').catch(function (err) {
+  console.error(err);
+  return null;
+});
+
+Promise.all([getJSON('../data/bixi_stations.geojson'), metroFile])
   .then(function (results) {
     const data = results[0];
     const metros = results[1];
 
     // Metro stations: a square in the line's colour; transfer stations get a black outline.
-    metroLayer = L.geoJSON(metros, {
+    metroLayer = metros && L.geoJSON(metros, {
       pointToLayer: function (feature, latlng) {
         return L.marker(latlng, {
           icon: metroIcon(feature.properties.lines.split(' / '), false),
@@ -389,7 +401,7 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), getJSON('../data/metro_st
         layer.bindPopup(function () { return metroPopup(feature.properties, layer.getLatLng()); });
       }
     });
-    drawMetroLines();
+    if (metroLayer) { drawMetroLines(); }
 
     const bixiLayer = L.geoJSON(data, {
       pointToLayer: function (feature, latlng) {
@@ -404,10 +416,10 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), getJSON('../data/metro_st
     });
     allStations = bixiLayer.getLayers();
     stationsLayer = L.layerGroup().addTo(map);
-    metroLayer.addTo(map);
+    if (metroLayer) { metroLayer.addTo(map); }
 
     addControls();
-    document.getElementById('status').innerHTML = '<span id="count"></span>, loading live availability...';
+    document.getElementById('status').innerHTML = '<span id="count"></span>, loading live availability...' + metroNote();
     refilter();
     loadStatus();
     setInterval(loadStatus, REFRESH_MS);
@@ -416,7 +428,9 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), getJSON('../data/metro_st
   })
   .catch(function (err) {
     document.getElementById('status').textContent =
-      'Could not load the station files. Open the console (F12) for details.';
+      'Could not load the Bixi station file, so the map cannot show any stations. Try reloading the page.';
+    document.getElementById('stm-updated').textContent =
+      'STM service status was not checked, because the map could not load its station data. Try reloading the page.';
     console.error(err);
   });
 
