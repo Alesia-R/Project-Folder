@@ -47,7 +47,7 @@ bixi-metro-mvp/
 |---|---|---|
 | Bixi stations and live availability | [BIXI Montréal GBFS feed], listed on [Données Québec](https://www.donneesquebec.ca/recherche/fr/dataset/89fdc53c-cf70-485f-ab1a-9b10044d9f15) | Creative Commons Attribution, © BIXI Montréal |
 | Metro stations and lines; live service status | [STM open data](https://www.stm.info/en/about/developers), listed on [Données Québec](https://www.donneesquebec.ca/recherche/fr/dataset/a0073997-3a02-4c34-8acf-758a2ee950f4) | CC BY 4.0, © Société de transport de Montréal |
-| Basemap | Esri World Light Gray Canvas | © Esri, HERE, Garmin, © OpenStreetMap contributors |
+| Basemap | Esri World Street Map | © Esri, HERE, Garmin, USGS, © OpenStreetMap contributors |
 
 ## Not in this iteration
 
@@ -111,8 +111,15 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
 
     I took "Open the console (F12) for details" out of the messages, since a commuter won't use it.
 
-| 6. On a phone (size view and my phone) | ... | ... | 
+| 6. On a phone (size view and my phone) |
+  The "want to..." and "Bikes available" tabs block the view of the map when it is on a phone. I added two toggle arrows that allows the user to close the tabs in order to see the map better. 
 
-| 7. Mouse in my pocket | ... | ... | 
+    The fold away panels both have a arrow beside their heading. Clicking the heading or the arrow to fold the panel down to just its title, and clickig it again opens it. 
+    
+    Both use the same small function, collapsiblePanel, and the styles are at the bottom of style.css.
+
+| 7. Mouse in my pocket |
+
+
 
 | 8. Accessibility audit | ... | ... |

@@ -3,17 +3,10 @@
 
 const map = L.map('map', { preferCanvas: true }).setView([45.52, -73.6], 12);
 
-// Esri Light Gray Canvas: a quiet light-grey base map (no API key) so the metro lines and Bixi dots stand out.
-// The tiles stop at zoom 16; Leaflet enlarges them beyond that. Labels are a separate layer on top.
-const ESRI_GRAY = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
-L.tileLayer(ESRI_GRAY + 'World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+// Esri World Street Map: a clean street map with street names, softer than OpenStreetMap. No API key needed.
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
   maxZoom: 19,
-  maxNativeZoom: 16,
-  attribution: 'Base map &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, &copy; OpenStreetMap contributors | Station data: <a href="https://bixi.com/en/open-data">BIXI Montréal</a>'
-}).addTo(map);
-L.tileLayer(ESRI_GRAY + 'World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 19,
-  maxNativeZoom: 16
+  attribution: 'Base map &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, USGS, &copy; OpenStreetMap contributors | Station data: <a href="https://bixi.com/en/open-data">BIXI Montréal</a>'
 }).addTo(map);
 
 const STATUS_URL = 'https://gbfs.velobixi.com/gbfs/en/station_status.json';
