@@ -118,8 +118,14 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
     
     Both use the same small function, collapsiblePanel, and the styles are at the bottom of style.css.
 
-| 7. Mouse in my pocket |
+| 7. Mouse in my pocket | No issues. 
 
+| 8. Accessibility audit | 
+  Scored 96: 
+  Red lines read: 
+  - "Touch targets do not have sufficient size or spacing." 
+  - "Identical links have the same purpose."
 
+  I changed the sizing of the touch targets, and fixed the links. I also changed the basemap credit to be correct. 
 
 | 8. Accessibility audit | ... | ... |
