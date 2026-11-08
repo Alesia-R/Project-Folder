@@ -39,7 +39,7 @@ main #map { flex: 1; height: auto; }
 }
 
 /* Fold-away map panels: the heading is a button with an arrow */
-.panel-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 24px;
+.panel-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 28px;
   padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .panel-toggle strong { display: inline; margin: 0; }
 .panel-toggle .arrow { width: 7px; height: 7px; border-right: 2px solid #555; border-bottom: 2px solid #555;
@@ -61,7 +61,6 @@ main #map { flex: 1; height: auto; }
 /* Phones: bigger zoom buttons and attribution links */
 @media (max-width: 700px) {
   .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 24px; }
-  .leaflet-control-attribution a { display: inline-block; min-height: 24px; line-height: 24px; padding: 0 2px; }
 }
 
 /* Computers: round metro dots and the chosen-area circle in the legend */
@@ -81,3 +80,6 @@ main #map { flex: 1; height: auto; }
 .find-box button:focus-visible, .find-box input:focus-visible { outline: 2px solid #1F2D5A; outline-offset: 2px; }
 #find-msg:empty { display: none; }
 #find-msg { margin: 8px 0 0; }
+
+/* Attribution links: 24 px tall on every screen (WCAG 2.5.8 / Lighthouse touch targets) */
+.leaflet-control-attribution a { display: inline-block; min-height: 24px; line-height: 24px; padding: 0 2px; }
