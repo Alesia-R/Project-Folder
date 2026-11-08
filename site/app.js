@@ -5,12 +5,23 @@
 const isPhone = window.matchMedia('(max-width: 700px)').matches;
 const map = L.map('map', { preferCanvas: true })
   .setView(isPhone ? [45.505, -73.57] : [45.52, -73.6], isPhone ? 14 : 12);
-map.createPane('selectArea').style.zIndex = 340;   // the chosen circle, under the metro lines and the BIXI dots
+// Panes, bottom to top: coloured land patches, the dashed circle, metro lines, place labels, then the dots.
+// None of them take clicks, so the BIXI and metro dots (in the overlay pane above) stay clickable.
+[['patches', 330], ['selectArea', 340], ['labels', 360]].forEach(function (pane) {
+  const el = map.createPane(pane[0]);
+  el.style.zIndex = pane[1];
+  el.style.pointerEvents = 'none';
+});
 
-// Esri World Street Map: a clean street map with street names, softer than OpenStreetMap. No API key needed.
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 19,
-  attribution: 'Base map &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, USGS, &copy; OpenStreetMap contributors | Station data: <a href="https://bixi.com/en/open-data">BIXI Montréal</a>'
+// Esri World Light Gray Canvas: a pale grey street map, with its labels drawn above the coloured patches.
+// No API key needed. Its tiles stop at zoom 16, so closer zooms enlarge them.
+const ESRI_GRAY = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+L.tileLayer(ESRI_GRAY + 'World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, maxNativeZoom: 16,
+  attribution: 'Base map &copy; <a href="https://www.esri.com">Esri</a>, HERE, Garmin, &copy; OpenStreetMap contributors | Station data: <a href="https://bixi.com/en/open-data">BIXI Montréal</a>'
+}).addTo(map);
+L.tileLayer(ESRI_GRAY + 'World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, maxNativeZoom: 16, pane: 'labels'
 }).addTo(map);
 
 const STATUS_URL = 'https://gbfs.velobixi.com/gbfs/en/station_status.json';
@@ -18,18 +29,19 @@ const REFRESH_MS = 60 * 1000;   // GBFS updates often; once a minute is plenty
 const STM_STATUS_URL = '/api/stm/service-status';
 const STM_REFRESH_MS = 60 * 1000;
 
-// Colour classes: how many of the thing you are looking for (bikes or docks).
+// Colour classes: how many of the thing you are looking for (bikes or docks). Oranges: darker means more.
 const classes = [
-  { label: 'None', min: 0, max: 0, colour: '#d62728' },
-  { label: '1 to 3', min: 1, max: 3, colour: '#ff7f0e' },
-  { label: '4 to 9', min: 4, max: 9, colour: '#bcbd22' },
-  { label: '10 or more', min: 10, max: Infinity, colour: '#2ca02c' },
-  { label: 'Closed / no data', colour: '#999999' }
+  { label: 'None', min: 0, max: 0, colour: '#FBE4D2' },
+  { label: '1 to 3', min: 1, max: 3, colour: '#F4C2A5' },
+  { label: '4 to 9', min: 4, max: 9, colour: '#EA9467' },
+  { label: '10 or more', min: 10, max: Infinity, colour: '#D4572A' },
+  { label: 'Closed / no data', colour: '#D3CFCA' }
 ];
+const METRO_LAND = '#9ED3EA';   // land nearest a metro station
+const NO_STATION_LAND = '#EDEDED';
 
-const WALK_M = 300;      // same cut-off as the notebook: "near a metro"
-const LOCATE_RADIUS_M = 700;   // "Use my location" shows the BIXI stations within this radius
-const METRO_RADIUS_M = WALK_M; // a chosen metro station shows the BIXI stations within this radius (same as its popup)
+let walkM = 300;         // the walking distance from the slider (300 m, about 4 minutes, is the notebook's "near a metro")
+const WALK_M_PER_MIN = 80;   // about 4.8 km/h
 const MONTREAL_BOUNDS = L.latLngBounds([45.35, -74.05], [45.75, -73.35]);   // roughly where the BIXI stations are
 const lineColours = { Green: '#00B300', Orange: '#D95700', Yellow: '#FFD900', Blue: '#0095E6' };   // STM's own colours
 const routeLines = { '1': 'Green', '2': 'Orange', '4': 'Yellow', '5': 'Blue' };
@@ -46,7 +58,7 @@ const lineOrder = {
 
 let mode = 'bikes';      // the one interaction: 'bikes' (I want to ride) or 'docks' (I want to park)
 let status = {};         // station_id -> live status
-let nearOnly = false;    // the filter: only BIXI stations within WALK_M of a metro
+let nearOnly = false;    // the filter: only BIXI stations within walking distance (walkM) of a metro
 let stationsLayer;       // the BIXI circles on the map (all of them, or only the near ones)
 let allStations = [];    // every BIXI circle, shown or not
 let metroLayer;          // metro stations as round dots (computers, and phones when zoomed out)
@@ -58,6 +70,8 @@ let disruptionLayer;     // red segments and dashed lines drawn over the metro l
 let selection = null;    // { latlng, radius, label }: the circle chosen by location, metro click or search
 let selectCircle;        // the circle drawn for it
 let bixiMissing = false; // the BIXI station file did not load: the map shows only the metro and STM status
+let patchLayer;          // the coloured land patches inside the circle
+let overviewQueued = false;
 let metroAlerts = [];    // { kind: 'disruption' | 'notice', title, description, lines, stations, wholeLine }
 
 function countFor(s) {
@@ -83,12 +97,13 @@ function popupFor(p) {
     '<br><small>Updated ' + new Date(s.last_reported * 1000).toLocaleTimeString() + '</small>';
 }
 
-// Live totals for the BIXI stations within WALK_M of a metro station, counted on the fly.
+// Live totals for the BIXI stations within walkM of a metro station, counted on the fly.
 function metroPopup(p, latlng) {
-  let stations = 0, bikes = 0, docks = 0;
+  let stations = 0, bikes = 0, docks = 0, capacity = 0;
   allStations.forEach(function (layer) {
-    if (map.distance(latlng, layer.getLatLng()) > WALK_M) { return; }
+    if (map.distance(latlng, layer.getLatLng()) > walkM) { return; }
     stations += 1;
+    capacity += layer.feature.properties.capacity || 0;
     const s = status[layer.feature.properties.station_id];
     if (s && s.is_installed && s.is_renting) { bikes += s.num_bikes_available; docks += s.num_docks_available; }
   });
@@ -108,9 +123,9 @@ function metroPopup(p, latlng) {
       notices.map(function (alert) { return '<br><small>' + escapeHTML(alert.description) + '</small>'; }).join('');
   }
   if (bixiMissing) { return html + '<br><em>BIXI stations could not be loaded</em>'; }
-  if (stations === 0) { return html + '<br><em>No BIXI station within ' + WALK_M + ' m</em>'; }
-  return html + '<br>' + stations + ' BIXI station' + (stations > 1 ? 's' : '') + ' within ' + WALK_M + ' m (' +
-    p.docks_nearby + ' docks)<br>Right now: ' + bikes + ' bikes, ' + docks + ' free docks';
+  if (stations === 0) { return html + '<br><em>No BIXI station within ' + walkM + ' m</em>'; }
+  return html + '<br>' + stations + ' BIXI station' + (stations > 1 ? 's' : '') + ' within ' + walkM + ' m (' +
+    capacity + ' docks)<br>Right now: ' + bikes + ' bikes, ' + docks + ' free docks';
 }
 
 function escapeHTML(value) {
@@ -290,7 +305,7 @@ function drawMetroLines() {
   map.createPane('metroLines').style.zIndex = 350;
   Object.keys(lineOrder).forEach(function (line) {
     L.polyline(latLngsFor(lineOrder[line]), {
-      pane: 'metroLines', color: lineColours[line], weight: 5, opacity: 0.85, interactive: false
+      pane: 'metroLines', color: lineColours[line], weight: 3, opacity: 0.8, interactive: false
     }).addTo(map);
   });
   disruptionLayer = L.layerGroup().addTo(map);
@@ -362,6 +377,11 @@ function loadMetroStatus() {
     });
 }
 
+// "Only stations near a metro": the notebook saved each station's distance to its nearest metro.
+function passesNearFilter(layer) {
+  return !nearOnly || layer.feature.properties.metro_dist_m <= walkM;
+}
+
 function inSelection(layer) {
   return map.distance(selection.latlng, layer.getLatLng()) <= selection.radius;
 }
@@ -372,11 +392,12 @@ function refilter() {
   const waiting = !isPhone && !selection;
   allStations.forEach(function (layer) {
     if (waiting) { return; }
-    if (nearOnly && !layer.feature.properties.near_metro) { return; }
+    if (!passesNearFilter(layer)) { return; }
     if (!isPhone && !inSelection(layer)) { return; }
     stationsLayer.addLayer(layer);
   });
   if (metroLayer && map.hasLayer(metroLayer)) { metroLayer.bringToFront(); }   // keep the metro dots drawn on top
+  scheduleOverview();
   const shown = stationsLayer.getLayers().length;
   const countEl = document.getElementById('count');
   if (!countEl) { return; }   // the live feed failed and the status line was replaced
@@ -387,7 +408,7 @@ function refilter() {
       ' m of ' + selection.label + (nearOnly ? ' (only those near a metro)' : '');
   } else {
     countEl.textContent = nearOnly
-      ? shown + ' of ' + allStations.length + ' stations within ' + WALK_M + ' m of a metro'
+      ? shown + ' of ' + allStations.length + ' stations within ' + walkM + ' m of a metro'
       : allStations.length + ' stations';
   }
 }
@@ -400,7 +421,7 @@ function selectArea(latlng, radius, label) {
   } else {
     selectCircle = L.circle(latlng, {
       radius: radius, pane: 'selectArea', interactive: false,
-      color: '#1F2D5A', weight: 2, fillColor: '#1F2D5A', fillOpacity: 0.08
+      color: '#111111', weight: 1.5, dashArray: '4 4', fill: false
     }).addTo(map);
   }
   refilter();
@@ -408,7 +429,7 @@ function selectArea(latlng, radius, label) {
 }
 
 function selectMetro(layer) {
-  selectArea(layer.getLatLng(), METRO_RADIUS_M, 'Métro ' + layer.feature.properties.metro_name);
+  selectArea(layer.getLatLng(), walkM, 'Métro ' + layer.feature.properties.metro_name);
 }
 
 function restyle() {
@@ -416,6 +437,7 @@ function restyle() {
     const n = countFor(status[layer.feature.properties.station_id]);
     layer.setStyle({ fillColor: colourFor(n) });
   });
+  scheduleOverview();
 }
 
 function loadStatus() {
@@ -508,7 +530,7 @@ Promise.all([bixiFile, metroFile])
     const bixiLayer = L.geoJSON(data || [], {
       pointToLayer: function (feature, latlng) {
         return L.circleMarker(latlng, {
-          radius: isPhone ? 5 : 3.5, weight: 1, color: '#ffffff', fillOpacity: 0.9, fillColor: '#999999'
+          radius: isPhone ? 5 : 4, weight: 1, color: '#4a4a4a', fillOpacity: 1, fillColor: classes[4].colour
         });
       },
       onEachFeature: function (feature, layer) {
@@ -568,7 +590,8 @@ function addControls() {
     const div = collapsiblePanel('panel', '<strong>I want to...</strong>',
       '<label><input type="radio" name="mode" value="bikes" checked> take a bike</label>' +
       '<label><input type="radio" name="mode" value="docks"> return a bike</label>' +
-      '<hr><label><input type="checkbox" id="near-only"> Only stations near a metro (' + WALK_M + ' m)</label>');
+      '<hr><label><input type="checkbox" id="near-only"> Only stations near a metro (<span class="walk-m">' + walkM +
+      '</span> m)</label>');
     div.addEventListener('change', function (e) {
       if (e.target.id === 'near-only') {
         nearOnly = e.target.checked;
@@ -578,6 +601,7 @@ function addControls() {
       mode = e.target.value;
       document.getElementById('legend-title').textContent = mode === 'bikes' ? 'Bikes available' : 'Free docks';
       restyle();
+      refilter();
     });
     return div;
   };
@@ -587,12 +611,13 @@ function addControls() {
   legend.onAdd = function () {
     return collapsiblePanel('panel legend', '<strong id="legend-title">Bikes available</strong>',
       classes.map(function (c) {
-        return '<span style="background:' + c.colour + '"></span>' + c.label;
+        return '<span class="patch-key" style="background:' + c.colour + '"></span>' + c.label;
       }).join('<br>') +
+      '<br><span class="patch-key" style="background:' + METRO_LAND + '"></span>Land nearest a métro station' +
       '<br><span class="metro-key round"></span>Metro station (white: transfer)' +
       (isPhone ? '<br><span class="metro-key">M</span>Metro station, zoomed in' : '') +
       '<br><span class="down-key round"></span>Station affected by a disruption' +
-      '<br><span class="area-key"></span>Area you chose' +
+      '<br><span class="area-key"></span>Your walking distance' +
       '<br><span class="line-key"></span>Disrupted stretch of line' +
       '<br><span class="line-key dashed"></span>Disruption, stations unknown');
   };
@@ -602,8 +627,16 @@ function addControls() {
 // Messages about finding a place go to the map button and to the yellow box in the side panel.
 let locateDot, locateMsg;
 
+let locateMsgTimer;
+
+// On phones the message beside the map button disappears after 4 seconds, so it does not cover the map.
+// (It stays in the side panel under "More information".)
 function setFindMessage(text) {
   [locateMsg, document.getElementById('find-msg')].forEach(function (el) { if (el) { el.textContent = text; } });
+  if (isPhone && locateMsg) {
+    clearTimeout(locateMsgTimer);
+    locateMsgTimer = setTimeout(function () { locateMsg.textContent = ''; }, 4000);
+  }
 }
 
 function startLocate() {
@@ -617,7 +650,7 @@ function addLocateControl() {
   control.onAdd = function () {
     const div = L.DomUtil.create('div', 'locate');
     div.innerHTML = '<button type="button" class="locate-button" title="Show my location" ' +
-      'aria-label="Show my location and the BIXI stations within ' + LOCATE_RADIUS_M + ' m">' +
+      'aria-label="Show my location and the transit within walking distance">' +
       '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">' +
       '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/>' +
       '<path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>' +
@@ -644,8 +677,8 @@ function addLocateControl() {
     locateDot.bindPopup('<strong>You are here</strong><br><small>Accurate to about ' +
       Math.round(e.accuracy) + ' m</small>');
     map.closePopup();   // e.g. a metro popup from an earlier choice
-    selectArea(e.latlng, LOCATE_RADIUS_M, 'you');
-    setFindMessage('Showing ' + LOCATE_RADIUS_M + ' m around you.');
+    selectArea(e.latlng, walkM, 'you');
+    setFindMessage('Showing ' + walkM + ' m around you.');
   });
 
   map.on('locationerror', function (e) {
@@ -684,7 +717,7 @@ function setUpFindBox(metros) {
     const layer = metroById[id];
     selectMetro(layer);
     shownMetro(id).openPopup();
-    setFindMessage('Showing ' + METRO_RADIUS_M + ' m around Métro ' + layer.feature.properties.metro_name + '.');
+    setFindMessage('Showing ' + walkM + ' m around Métro ' + layer.feature.properties.metro_name + '.');
   });
 }
 
@@ -695,3 +728,243 @@ document.getElementById('info-toggle').addEventListener('click', function () {
   this.textContent = open ? 'Less information' : 'More information';
   map.invalidateSize();   // the map got shorter or taller
 });
+
+// ---- Walking distance slider ----------------------------------------------------------------------------
+
+function walkTimeText(metres) {
+  const seconds = Math.round(metres / WALK_M_PER_MIN * 60);
+  return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+}
+
+function updateWalkLabels() {
+  document.getElementById('radius-value').textContent = (walkM / 1000).toFixed(2);
+  document.getElementById('walk-value').textContent = walkTimeText(walkM);
+  document.querySelectorAll('.walk-m').forEach(function (el) { el.textContent = walkM; });
+  const [min, sec] = walkTimeText(walkM).split(':');
+  document.getElementById('walk-slider').setAttribute('aria-valuetext',
+    walkM + ' metres, about ' + Number(min) + ' minutes ' + Number(sec) + ' seconds of walking');
+}
+
+(function setUpSlider() {
+  const slider = document.getElementById('walk-slider');
+  slider.value = walkM;
+  updateWalkLabels();
+  slider.addEventListener('input', function () {
+    walkM = Number(slider.value);
+    updateWalkLabels();
+    if (selection) {
+      selection.radius = walkM;
+      selectCircle.setRadius(walkM);
+      setFindMessage('Showing ' + walkM + ' m around ' + selection.label + '.');
+    }
+    if (stationsLayer) { refilter(); }
+  });
+  // When the slider is let go, zoom so the whole circle fits.
+  slider.addEventListener('change', function () {
+    if (selection) { map.fitBounds(selection.latlng.toBounds(walkM * 2), { padding: [20, 20] }); }
+  });
+})();
+
+// ---- Coloured land patches, donut and lists ----------------------------------------------------------------
+// Inside the circle, each bit of land belongs to its nearest station (a Voronoi cell, cut to the circle).
+// Worked out in Web Mercator metres; areas are corrected back to real square metres with cos(latitude)^2.
+
+const CRS = L.CRS.EPSG3857;
+
+function scheduleOverview() {
+  if (overviewQueued) { return; }
+  overviewQueued = true;
+  requestAnimationFrame(function () { overviewQueued = false; updateOverview(); });
+}
+
+// Keeps the part of `poly` that is closer to a than to b.
+function clipCloserTo(poly, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    const fp = (p.x - mx) * dx + (p.y - my) * dy, fq = (q.x - mx) * dx + (q.y - my) * dy;
+    if (fp <= 0) { out.push(p); }
+    if ((fp <= 0) !== (fq <= 0)) {
+      const t = fp / (fp - fq);
+      out.push({ x: p.x + t * (q.x - p.x), y: p.y + t * (q.y - p.y) });
+    }
+  }
+  return out;
+}
+
+function polygonArea(poly) {
+  let sum = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    sum += p.x * q.y - q.x * p.y;
+  }
+  return Math.abs(sum) / 2;
+}
+
+function farthest(point, poly) {
+  return poly.reduce(function (m, v) { return Math.max(m, Math.hypot(v.x - point.x, v.y - point.y)); }, 0);
+}
+
+// The categories the land is split into (map patches, donut slices and the "Top modes" list).
+function landCategories() {
+  const what = mode === 'bikes' ? 'bikes' : 'free docks';
+  return [
+    { id: 'metro', label: 'Métro station', colour: METRO_LAND },
+    { id: 3, label: 'Bixi, 10 or more ' + what, colour: classes[3].colour },
+    { id: 2, label: 'Bixi, 4 to 9 ' + what, colour: classes[2].colour },
+    { id: 1, label: 'Bixi, 1 to 3 ' + what, colour: classes[1].colour },
+    { id: 0, label: 'Bixi, no ' + what, colour: classes[0].colour },
+    { id: 4, label: 'Bixi, closed / no data', colour: classes[4].colour },
+    { id: 'none', label: 'No station nearby', colour: NO_STATION_LAND }
+  ];
+}
+
+function bixiClass(stationId) {
+  const n = countFor(status[stationId]);
+  if (n === null) { return 4; }
+  return classes.findIndex(function (c) { return n >= c.min && n <= c.max; });
+}
+
+// Splits the circle between the stations around it. Returns [{ category, latlngs, areaM2 }].
+function landPatches(center, radius) {
+  const c = CRS.project(center);
+  const k = 1 / Math.cos(center.lat * Math.PI / 180);   // Mercator metres per real metre here
+  const R = radius * k;
+  const circle = [];
+  for (let i = 0; i < 96; i++) {
+    const a = i / 96 * 2 * Math.PI;
+    circle.push({ x: c.x + R * Math.cos(a), y: c.y + R * Math.sin(a) });
+  }
+  const reach = R + Math.max(R, 500 * k);   // stations just outside the circle can still own land inside it
+  const sites = [];
+  allStations.forEach(function (layer) {
+    if (!passesNearFilter(layer)) { return; }
+    sites.push({ p: CRS.project(layer.getLatLng()), category: bixiClass(layer.feature.properties.station_id) });
+  });
+  Object.keys(metroById).forEach(function (id) {
+    sites.push({ p: CRS.project(metroById[id].getLatLng()), category: 'metro' });
+  });
+  const near = sites.filter(function (s) { return Math.hypot(s.p.x - c.x, s.p.y - c.y) <= reach; });
+  if (!near.length) {
+    return [{ category: 'none', poly: circle, areaM2: polygonArea(circle) / (k * k) }].map(toLatLngs);
+  }
+
+  const patches = [];
+  near.forEach(function (site, i) {
+    const others = near.map(function (o, j) { return { o: o, j: j, d: Math.hypot(o.p.x - site.p.x, o.p.y - site.p.y) }; })
+      .filter(function (x) { return x.j !== i; })
+      .sort(function (a, b) { return a.d - b.d; });
+    let cell = circle;
+    let maxR = farthest(site.p, cell);
+    for (let n = 0; n < others.length && cell.length >= 3; n++) {
+      const other = others[n];
+      if (other.d > 2 * maxR) { break; }   // too far away to take any of this cell
+      if (other.d === 0) {                 // two stations in the same spot: the first one keeps the land
+        if (other.j < i) { cell = []; }
+        continue;
+      }
+      cell = clipCloserTo(cell, site.p, other.o.p);
+      maxR = farthest(site.p, cell);
+    }
+    if (cell.length >= 3) { patches.push({ category: site.category, poly: cell, areaM2: polygonArea(cell) / (k * k) }); }
+  });
+  return patches.map(toLatLngs);
+}
+
+function toLatLngs(patch) {
+  patch.latlngs = patch.poly.map(function (v) { return CRS.unproject(L.point(v.x, v.y)); });
+  return patch;
+}
+
+function updateOverview() {
+  if (!patchLayer) { patchLayer = L.layerGroup().addTo(map); }
+  patchLayer.clearLayers();
+  const empty = !selection;
+  document.getElementById('overview-empty').hidden = !empty;
+  document.getElementById('overview').hidden = empty;
+  document.getElementById('modes-block').hidden = empty;
+  if (empty) { return; }
+
+  const patches = landPatches(selection.latlng, selection.radius);
+  const categories = landCategories();
+  const byId = {};
+  categories.forEach(function (cat) { byId[cat.id] = cat; cat.area = 0; });
+  patches.forEach(function (patch) {
+    const cat = byId[patch.category];
+    cat.area += patch.areaM2;
+    L.polygon(patch.latlngs, {
+      pane: 'patches', interactive: false, color: '#ffffff', weight: 1.5, fillColor: cat.colour, fillOpacity: 0.6   // see-through enough to show the streets
+    }).addTo(patchLayer);
+  });
+
+  const total = categories.reduce(function (sum, cat) { return sum + cat.area; }, 0);
+  document.getElementById('land-area').textContent = (total / 10000).toFixed(2);
+  const used = categories.filter(function (cat) { return cat.area > 0; });
+  drawDonut(used, total);
+
+  // Top modes: land area per category, largest first (hectares, like the acres in Morphocode).
+  const top = document.getElementById('top-modes');
+  top.replaceChildren();
+  used.slice().sort(function (a, b) { return b.area - a.area; }).forEach(function (cat) {
+    top.appendChild(listItem(cat.colour, cat.label, (cat.area / 10000).toFixed(2) + ' ha'));
+  });
+
+  // Right now: what is inside the circle.
+  let stations = 0, bikes = 0, ebikes = 0, docks = 0;
+  allStations.forEach(function (layer) {
+    if (!passesNearFilter(layer) || !inSelection(layer)) { return; }
+    stations += 1;
+    const s = status[layer.feature.properties.station_id];
+    if (s && s.is_installed && s.is_renting) {
+      bikes += s.num_bikes_available;
+      ebikes += s.num_ebikes_available || 0;
+      docks += s.num_docks_available;
+    }
+  });
+  const metros = Object.keys(metroById).map(function (id) { return metroById[id]; }).filter(inSelection);
+  const now = document.getElementById('right-now');
+  now.replaceChildren();
+  if (bixiMissing) {
+    now.appendChild(listItem(classes[4].colour, 'BIXI stations could not be loaded', ''));
+  } else {
+    now.appendChild(listItem(classes[3].colour, 'Bixi stations', stations));
+    now.appendChild(listItem(classes[2].colour, 'Bikes available (electric)', bikes + ' (' + ebikes + ')'));
+    now.appendChild(listItem(classes[1].colour, 'Free docks', docks));
+  }
+  now.appendChild(listItem(METRO_LAND, metros.length
+    ? 'Métro: ' + metros.map(function (m) { return m.feature.properties.metro_name; }).join(', ')
+    : 'Métro stations', metros.length));
+}
+
+function listItem(colour, name, value) {
+  const li = document.createElement('li');
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  dot.style.background = colour;
+  const label = document.createElement('span');
+  label.className = 'name';
+  label.textContent = name;
+  const number = document.createElement('span');
+  number.className = 'value';
+  number.textContent = value;
+  li.append(dot, label, number);
+  return li;
+}
+
+// Donut chart: one ring segment per category, drawn with stroke dashes (pathLength 100 = the whole ring).
+function drawDonut(categories, total) {
+  const svg = document.getElementById('donut');
+  let offset = 0;
+  svg.innerHTML = categories.map(function (cat) {
+    const share = total ? cat.area / total * 100 : 0;
+    const arc = '<circle cx="80" cy="80" r="46" fill="none" stroke="' + cat.colour + '" stroke-width="48" pathLength="100"' +
+      ' stroke-dasharray="' + share + ' ' + (100 - share) + '" stroke-dashoffset="' + (-offset) + '"' +
+      ' transform="rotate(-90 80 80)"><title>' + escapeHTML(cat.label) + ': ' + Math.round(share) + '%</title></circle>';
+    offset += share;
+    return arc;
+  }).join('');
+  svg.setAttribute('aria-label', 'Share of land by nearest station: ' + categories.map(function (cat) {
+    return cat.label + ' ' + Math.round(total ? cat.area / total * 100 : 0) + '%';
+  }).join(', '));
+}

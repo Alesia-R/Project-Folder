@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <title>Bixi or Métro? Alternate forms of transportation in Montréal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -11,16 +14,30 @@
   <header>
     <h1>Bixi or Métro? Alternate forms of transportation in Montréal</h1>
     <p id="status">Loading stations...</p>
-    <button type="button" id="info-toggle" class="info-toggle" aria-expanded="false" aria-controls="status story">More information</button>
+    <button type="button" id="info-toggle" class="info-toggle" aria-expanded="false" aria-controls="status panel">More information</button>
   </header>
 
   <main>
-    <aside id="story">
-      <h2>Live STM service status</h2>
-      <p id="stm-updated" class="small">Loading STM service status...</p>
-      <div id="stm-alerts" aria-live="polite"></div>
-      
-      <div class="find-box">
+    <div id="map"></div>
+
+    <aside id="panel">
+      <!-- The walking distance slider, with the radius and walk time under it (Morphocode-style) -->
+      <section class="radius-box">
+        <label for="walk-slider" class="visually-hidden">Walking distance</label>
+        <input type="range" id="walk-slider" min="100" max="1500" step="50" value="300">
+        <div class="stats">
+          <div>
+            <span class="stat-label">Radius (km)</span>
+            <span class="stat-value" id="radius-value">0.30</span>
+          </div>
+          <div>
+            <span class="stat-label">Walk time</span>
+            <span class="stat-value" id="walk-value">3:45</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="block find-box">
         <p><strong>Choose your location to see the transit available around you.</strong></p>
         <button type="button" id="find-me">Use my location</button>
         <form id="metro-search" role="search">
@@ -32,32 +49,59 @@
           <datalist id="metro-names"></datalist>
         </form>
         <p id="find-msg" class="small" aria-live="polite"></p>
-      </div>
+      </section>
 
-      <!-- STORY: my words. -->
-      <h2>Who it is for</h2>
-      <p>The average commuter in Montréal, especially in high-density areas where many types of transport come together.</p>
+      <section class="block">
+        <h2 class="section-title">Transit overview</h2>
+        <p id="overview-empty" class="small">Choose your location or a métro station to see the transit around it.</p>
+        <div id="overview" hidden>
+          <span class="stat-label">Land area (ha)</span>
+          <span class="stat-value" id="land-area"></span>
+          <svg id="donut" viewBox="0 0 160 160" role="img" aria-label="Share of land by nearest station"></svg>
+          <p class="small">Each patch of land inside the circle is coloured by the station nearest to it.</p>
+        </div>
+      </section>
 
-      <h2>Why it matters</h2>
-      <p>Right now the average commuter cannot easily find out whether it is more convenient to take a Bixi or the metro for a short distance, especially when there are delays in service or bikes are running out.</p>
-      <p>Looking at the metro together with Bixi availability gives people faster access to real-time data, in one place, so they can pick the quickest option themselves.</p>
+      <section class="block" id="modes-block" hidden>
+        <h2 class="section-title">Top modes</h2>
+        <ul id="top-modes" class="mode-list"></ul>
+        <h3 class="sub-title">Right now, within <span class="walk-m">300</span> m</h3>
+        <ul id="right-now" class="mode-list"></ul>
+      </section>
 
-      <h2>What you can do here</h2>
-      <p>Choose <strong>take a bike</strong> or <strong>return a bike</strong> (top right). Every Bixi station is coloured by how many bikes or free docks it has right now. Click a metro station (a coloured dot, or an <strong>M</strong> on phones) or search for one at the top of this panel to see the Bixi bikes and docks within a 4-minute walk (300 m).</p>
+      <section class="block">
+        <h2 class="section-title">Live STM service status</h2>
+        <p id="stm-updated" class="small">Loading STM service status...</p>
+        <div id="stm-alerts" aria-live="polite"></div>
+      </section>
 
-      <h2>What this is not</h2>
-      <p>This is not another routing app. It does not plan your trip; it shows live availability and STM service notices for short distances so you can decide.</p>
+      <details class="block about">
+        <summary class="section-title">About this map</summary>
+        <!-- STORY: my words. -->
+        <h3>Who it is for</h3>
+        <p>The average commuter in Montréal, especially in high-density areas where many types of transport come together.</p>
 
-      <h2>Sources</h2>
-      <p class="small">
-        Bixi stations and live availability: <a href="https://gbfs.velobixi.com/gbfs/gbfs.json">BIXI Montréal GBFS feed</a>
-        (<a href="https://www.donneesquebec.ca/recherche/fr/dataset/89fdc53c-cf70-485f-ab1a-9b10044d9f15">Bixi on Données Québec</a>), © BIXI Montréal, Creative Commons Attribution.<br>
-        Metro stations: <a href="https://www.stm.info/en/about/developers">STM GTFS feed</a>
-        (<a href="https://www.donneesquebec.ca/recherche/fr/dataset/a0073997-3a02-4c34-8acf-758a2ee950f4">STM on Données Québec</a>), © Société de transport de Montréal.<br>
-        Basemap: © Esri, HERE, Garmin, USGS, © OpenStreetMap contributors.
-      </p>
+        <h3>Why it matters</h3>
+        <p>Right now the average commuter cannot easily find out whether it is more convenient to take a Bixi or the metro for a short distance, especially when there are delays in service or bikes are running out.</p>
+        <p>Looking at the metro together with Bixi availability gives people faster access to real-time data, in one place, so they can pick the quickest option themselves.</p>
+
+        <h3>What you can do here</h3>
+        <p>Choose <strong>take a bike</strong> or <strong>return a bike</strong> (top right of the map). Pick a place: your location, a metro station on the map, or the search above. Then set how far you are willing to walk with the slider. Inside the circle, each patch of land is coloured by its nearest station: blue for the métro, orange for Bixi (darker means more bikes or free docks right now).</p>
+
+        <h3>What this is not</h3>
+        <p>This is not another routing app. It does not plan your trip; it shows live availability and STM service notices for short distances so you can decide.</p>
+
+        <h3>Sources</h3>
+        <p class="small">
+          Bixi stations and live availability: <a href="https://gbfs.velobixi.com/gbfs/gbfs.json">BIXI Montréal GBFS feed</a>
+          (<a href="https://www.donneesquebec.ca/recherche/fr/dataset/89fdc53c-cf70-485f-ab1a-9b10044d9f15">Bixi on Données Québec</a>), © BIXI Montréal, Creative Commons Attribution.<br>
+          Metro stations: <a href="https://www.stm.info/en/about/developers">STM GTFS feed</a>
+          (<a href="https://www.donneesquebec.ca/recherche/fr/dataset/a0073997-3a02-4c34-8acf-758a2ee950f4">STM on Données Québec</a>), © Société de transport de Montréal.<br>
+          Basemap: Esri World Light Gray Canvas, © Esri, HERE, Garmin, © OpenStreetMap contributors.<br>
+          Layout inspired by the Morphocode Explorer.
+        </p>
+      </details>
     </aside>
-    <div id="map"></div>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
