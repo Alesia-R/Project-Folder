@@ -6,7 +6,6 @@ const isPhone = window.matchMedia('(max-width: 700px)').matches;
 const map = L.map('map', { preferCanvas: true })
   .setView(isPhone ? [45.505, -73.57] : [45.52, -73.6], isPhone ? 14 : 12);
 map.createPane('selectArea').style.zIndex = 340;   // the chosen circle, under the metro lines and the BIXI dots
-map.createPane('metroStops').style.zIndex = 450;   // computer metro dots, above the BIXI dots
 
 // Esri World Street Map: a clean street map with street names, softer than OpenStreetMap. No API key needed.
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
@@ -50,7 +49,10 @@ let status = {};         // station_id -> live status
 let nearOnly = false;    // the filter: only BIXI stations within WALK_M of a metro
 let stationsLayer;       // the BIXI circles on the map (all of them, or only the near ones)
 let allStations = [];    // every BIXI circle, shown or not
-let metroLayer;
+let metroLayer;          // metro stations as round dots (computers, and phones when zoomed out)
+let metroIconLayer;      // phones only: the same stations as "M" icons, shown when zoomed in
+let metroIconById = {};  // metro_id -> "M" icon
+const M_ICON_ZOOM = 15;  // phones: from this zoom in, the dots turn into "M" icons
 let metroById = {};      // metro_id -> marker
 let disruptionLayer;     // red segments and dashed lines drawn over the metro lines
 let selection = null;    // { latlng, radius, label }: the circle chosen by location, metro click or search
@@ -254,9 +256,29 @@ function metroIcon(lines, down) {
 
 // Computers: small round dots along the lines, drawn on the map canvas. Transfer stations are white with a black ring.
 function metroDotStyle(lines, down) {
-  if (down) { return { radius: 5, weight: 2, color: '#7a0000', fillColor: '#d62728', fillOpacity: 1 }; }
-  if (lines.length > 1) { return { radius: 5, weight: 2, color: '#000000', fillColor: '#ffffff', fillOpacity: 1 }; }
-  return { radius: 4, weight: 1.5, color: '#ffffff', fillColor: lineColours[lines[0]], fillOpacity: 1 };
+  if (down) { return { radius: 7, weight: 2.5, color: '#7a0000', fillColor: '#d62728', fillOpacity: 1 }; }
+  if (lines.length > 1) { return { radius: 7, weight: 2.5, color: '#000000', fillColor: '#ffffff', fillOpacity: 1 }; }
+  return { radius: 6, weight: 2, color: '#ffffff', fillColor: lineColours[lines[0]], fillOpacity: 1 };
+}
+
+// Phones: dots when zoomed out, "M" icons when zoomed in. Computers always show the dots.
+function showingIcons() {
+  return !!metroIconLayer && map.getZoom() >= M_ICON_ZOOM;
+}
+
+function updateMetroView() {
+  if (!metroLayer) { return; }
+  const icons = showingIcons();
+  if (icons && map.hasLayer(metroLayer)) { map.removeLayer(metroLayer); }
+  if (!icons && !map.hasLayer(metroLayer)) { map.addLayer(metroLayer); }
+  if (!metroIconLayer) { return; }
+  if (icons && !map.hasLayer(metroIconLayer)) { map.addLayer(metroIconLayer); }
+  if (!icons && map.hasLayer(metroIconLayer)) { map.removeLayer(metroIconLayer); }
+}
+
+// The station's dot or "M" icon, whichever is on the map now.
+function shownMetro(id) {
+  return showingIcons() ? metroIconById[id] : metroById[id];
 }
 
 function latLngsFor(ids) {
@@ -282,10 +304,13 @@ function updateMetroMarkers() {
   const down = new Set();
   disruptions.forEach(function (alert) { alert.stations.forEach(function (id) { down.add(id); }); });
 
-  metroLayer.eachLayer(function (layer) {
-    const lines = layer.feature.properties.lines.split(' / ');
-    const isDown = down.has(layer.feature.properties.metro_id);
-    if (layer.setIcon) { layer.setIcon(metroIcon(lines, isDown)); } else { layer.setStyle(metroDotStyle(lines, isDown)); }
+  [metroLayer, metroIconLayer].forEach(function (group) {
+    if (!group) { return; }
+    group.eachLayer(function (layer) {
+      const lines = layer.feature.properties.lines.split(' / ');
+      const isDown = down.has(layer.feature.properties.metro_id);
+      if (layer.setIcon) { layer.setIcon(metroIcon(lines, isDown)); } else { layer.setStyle(metroDotStyle(lines, isDown)); }
+    });
   });
 
   disruptionLayer.clearLayers();
@@ -351,6 +376,7 @@ function refilter() {
     if (!isPhone && !inSelection(layer)) { return; }
     stationsLayer.addLayer(layer);
   });
+  if (metroLayer && map.hasLayer(metroLayer)) { metroLayer.bringToFront(); }   // keep the metro dots drawn on top
   const shown = stationsLayer.getLayers().length;
   const countEl = document.getElementById('count');
   if (!countEl) { return; }   // the live feed failed and the status line was replaced
@@ -443,24 +469,38 @@ Promise.all([bixiFile, metroFile])
     if (!data && !metros) { throw new Error('Neither the BIXI nor the metro station file could be loaded.'); }
     bixiMissing = !data;
 
-    // Metro stations: a square in the line's colour; transfer stations get a black outline.
+    // Metro stations: round dots in the line's colour (white with a black ring at transfer stations).
+    // Clicking one (dot or "M" icon) draws its circle, zooms in and opens its popup.
+    const metroEvents = function (feature, layer) {
+      layer.bindPopup(function () { return metroPopup(feature.properties, layer.getLatLng()); });
+      layer.on('click', function () {
+        selectMetro(layer);
+        shownMetro(feature.properties.metro_id).openPopup();   // zooming in may have swapped the dot for an icon
+      });
+    };
     metroLayer = metros && L.geoJSON(metros, {
       pointToLayer: function (feature, latlng) {
-        const lines = feature.properties.lines.split(' / ');
-        if (!isPhone) {
-          return L.circleMarker(latlng, Object.assign({ pane: 'metroStops' }, metroDotStyle(lines, false)));
-        }
+        // Same canvas as the BIXI dots: a separate pane would put a second canvas on top that swallows their clicks.
+        return L.circleMarker(latlng, metroDotStyle(feature.properties.lines.split(' / '), false));
+      },
+      onEachFeature: function (feature, layer) {
+        metroById[feature.properties.metro_id] = layer;
+        layer.bindTooltip('Métro ' + feature.properties.metro_name, { direction: 'top', offset: [0, -6] });
+        metroEvents(feature, layer);
+      }
+    });
+    // Phones: the "M" icons for when the map is zoomed in.
+    metroIconLayer = metros && isPhone && L.geoJSON(metros, {
+      pointToLayer: function (feature, latlng) {
         return L.marker(latlng, {
-          icon: metroIcon(lines, false),
+          icon: metroIcon(feature.properties.lines.split(' / '), false),
           title: 'Métro ' + feature.properties.metro_name,
           zIndexOffset: 1000
         });
       },
       onEachFeature: function (feature, layer) {
-        metroById[feature.properties.metro_id] = layer;
-        layer.bindPopup(function () { return metroPopup(feature.properties, layer.getLatLng()); });
-        if (!isPhone) { layer.bindTooltip('Métro ' + feature.properties.metro_name, { direction: 'top', offset: [0, -4] }); }
-        layer.on('click', function () { selectMetro(layer); });
+        metroIconById[feature.properties.metro_id] = layer;
+        metroEvents(feature, layer);
       }
     });
     if (metroLayer) { drawMetroLines(); }
@@ -478,7 +518,10 @@ Promise.all([bixiFile, metroFile])
     });
     allStations = bixiLayer.getLayers();
     stationsLayer = L.layerGroup().addTo(map);
-    if (metroLayer) { metroLayer.addTo(map); }
+    if (metroLayer) {
+      updateMetroView();
+      map.on('zoomend', updateMetroView);
+    }
 
     addControls();
     addLocateControl();
@@ -505,8 +548,8 @@ Promise.all([bixiFile, metroFile])
 
 // A map panel whose heading is a button: click it to fold the panel away and see more of the map.
 function collapsiblePanel(className, headingHTML, bodyHTML) {
-  const div = L.DomUtil.create('div', className);
-  div.innerHTML = '<button type="button" class="panel-toggle" aria-expanded="true">' + headingHTML +
+  const div = L.DomUtil.create('div', className + ' collapsed');   // starts closed
+  div.innerHTML = '<button type="button" class="panel-toggle" aria-expanded="false">' + headingHTML +
     '<i class="arrow" aria-hidden="true"></i></button><div class="panel-body">' + bodyHTML + '</div>';
   const button = div.querySelector('.panel-toggle');
   button.addEventListener('click', function () {
@@ -546,10 +589,9 @@ function addControls() {
       classes.map(function (c) {
         return '<span style="background:' + c.colour + '"></span>' + c.label;
       }).join('<br>') +
-      (isPhone ? '<br><span class="metro-key">M</span>Metro station' +
-        '<br><span class="down-key">M</span>Station affected by a disruption'
-        : '<br><span class="metro-key round"></span>Metro station (white: transfer)' +
-        '<br><span class="down-key round"></span>Station affected by a disruption') +
+      '<br><span class="metro-key round"></span>Metro station (white: transfer)' +
+      (isPhone ? '<br><span class="metro-key">M</span>Metro station, zoomed in' : '') +
+      '<br><span class="down-key round"></span>Station affected by a disruption' +
       '<br><span class="area-key"></span>Area you chose' +
       '<br><span class="line-key"></span>Disrupted stretch of line' +
       '<br><span class="line-key dashed"></span>Disruption, stations unknown');
@@ -641,7 +683,15 @@ function setUpFindBox(metros) {
     if (!id) { setFindMessage('No métro station matches that name. Pick one from the list.'); return; }
     const layer = metroById[id];
     selectMetro(layer);
-    layer.openPopup();
+    shownMetro(id).openPopup();
     setFindMessage('Showing ' + METRO_RADIUS_M + ' m around Métro ' + layer.feature.properties.metro_name + '.');
   });
 }
+
+// Phones: the header shows only the title; "More information" opens the status line and the side panel.
+document.getElementById('info-toggle').addEventListener('click', function () {
+  const open = document.body.classList.toggle('info-open');
+  this.setAttribute('aria-expanded', String(open));
+  this.textContent = open ? 'Less information' : 'More information';
+  map.invalidateSize();   // the map got shorter or taller
+});

@@ -32,10 +32,22 @@ main { display: flex; height: calc(100vh - 62px); }
 #story p { margin: 4px 0; }
 #story .small { font-size: 12px; color: #444; }
 main #map { flex: 1; height: auto; }
+/* "More information" tab: phones only */
+.info-toggle { display: none; }
 @media (max-width: 700px) {
-  main { flex-direction: column; height: auto; }
-  #story { width: auto; border-right: 0; }
-  main #map { height: 75vh; flex: none; }
+  /* Phones: the map fills the screen under a one-line header; the side panel opens with "More information" */
+  body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+  header { flex: none; padding: 8px 12px 0; }
+  header h1 { font-size: 16px; }
+  .info-toggle { display: block; min-height: 32px; margin: 6px 0 0; padding: 4px 12px; border: 0; border-radius: 6px 6px 0 0;
+    background: #DCBD23; color: #1F2D5A; font: bold 13px Arial, Helvetica, sans-serif; cursor: pointer; }
+  .info-toggle::after { content: ' \25BE'; }
+  body.info-open .info-toggle::after { content: ' \25B4'; }
+  .info-toggle:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  body:not(.info-open) #status, body:not(.info-open) #story { display: none; }
+  main { flex: 1; min-height: 0; flex-direction: column; height: auto; }
+  #story { flex: none; width: auto; max-height: 45%; border-right: 0; border-bottom: 1px solid #ddd; }
+  main #map { flex: 1; min-height: 0; height: auto; }
 }
 
 /* Fold-away map panels: the heading is a button with an arrow */
