@@ -1,5 +1,5 @@
 body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
-header { padding: 10px 16px; background: #1F2D5A; color: #fff; }
+header { padding: 10px 16px; background: #00000e; color: #fff; }
 header h1 { margin: 0; font-size: 20px; }
 header p { margin: 4px 0 0; font-size: 14px; color: #DCBD23; }
 #map { height: calc(100vh - 62px); }
