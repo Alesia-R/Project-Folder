@@ -1,7 +1,12 @@
 // BIXI stations: positions from the notebook's GeoJSON, availability live from BIXI's GBFS feed.
 // Metro stations: from the STM's GTFS feed, cross-listed with BIXI in the notebook.
 
-const map = L.map('map', { preferCanvas: true }).setView([45.52, -73.6], 12);
+// On phones, start zoomed in on downtown so the metro markers do not overlap (touch targets, WCAG 2.5.8).
+const isPhone = window.matchMedia('(max-width: 700px)').matches;
+const map = L.map('map', { preferCanvas: true })
+  .setView(isPhone ? [45.505, -73.57] : [45.52, -73.6], isPhone ? 14 : 12);
+map.createPane('selectArea').style.zIndex = 340;   // the chosen circle, under the metro lines and the BIXI dots
+map.createPane('metroStops').style.zIndex = 450;   // computer metro dots, above the BIXI dots
 
 // Esri World Street Map: a clean street map with street names, softer than OpenStreetMap. No API key needed.
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
@@ -24,6 +29,9 @@ const classes = [
 ];
 
 const WALK_M = 300;      // same cut-off as the notebook: "near a metro"
+const LOCATE_RADIUS_M = 700;   // "Use my location" shows the BIXI stations within this radius
+const METRO_RADIUS_M = WALK_M; // a chosen metro station shows the BIXI stations within this radius (same as its popup)
+const MONTREAL_BOUNDS = L.latLngBounds([45.35, -74.05], [45.75, -73.35]);   // roughly where the BIXI stations are
 const lineColours = { Green: '#00B300', Orange: '#D95700', Yellow: '#FFD900', Blue: '#0095E6' };   // STM's own colours
 const routeLines = { '1': 'Green', '2': 'Orange', '4': 'Yellow', '5': 'Blue' };
 // Station order along each line (metro_id), end to end. Transfer stations appear on every line they serve.
@@ -45,6 +53,8 @@ let allStations = [];    // every BIXI circle, shown or not
 let metroLayer;
 let metroById = {};      // metro_id -> marker
 let disruptionLayer;     // red segments and dashed lines drawn over the metro lines
+let selection = null;    // { latlng, radius, label }: the circle chosen by location, metro click or search
+let selectCircle;        // the circle drawn for it
 let metroAlerts = [];    // { kind: 'disruption' | 'notice', title, description, lines, stations, wholeLine }
 
 function countFor(s) {
@@ -236,8 +246,15 @@ function metroIcon(lines, down) {
   return L.divIcon({
     className: 'metro' + (lines.length > 1 ? ' transfer' : '') + (down ? ' down' : ''),
     html: '<span style="background:' + (down ? '#d62728' : lineColours[lines[0]]) + '">M</span>',
-    iconSize: [16, 16]
+    iconSize: [24, 24]   // 24 px tap area (WCAG 2.5.8); the visible square inside stays 14 px
   });
+}
+
+// Computers: small round dots along the lines, drawn on the map canvas. Transfer stations are white with a black ring.
+function metroDotStyle(lines, down) {
+  if (down) { return { radius: 5, weight: 2, color: '#7a0000', fillColor: '#d62728', fillOpacity: 1 }; }
+  if (lines.length > 1) { return { radius: 5, weight: 2, color: '#000000', fillColor: '#ffffff', fillOpacity: 1 }; }
+  return { radius: 4, weight: 1.5, color: '#ffffff', fillColor: lineColours[lines[0]], fillOpacity: 1 };
 }
 
 function latLngsFor(ids) {
@@ -265,7 +282,8 @@ function updateMetroMarkers() {
 
   metroLayer.eachLayer(function (layer) {
     const lines = layer.feature.properties.lines.split(' / ');
-    layer.setIcon(metroIcon(lines, down.has(layer.feature.properties.metro_id)));
+    const isDown = down.has(layer.feature.properties.metro_id);
+    if (layer.setIcon) { layer.setIcon(metroIcon(lines, isDown)); } else { layer.setStyle(metroDotStyle(lines, isDown)); }
   });
 
   disruptionLayer.clearLayers();
@@ -317,17 +335,52 @@ function loadMetroStatus() {
     });
 }
 
+function inSelection(layer) {
+  return map.distance(selection.latlng, layer.getLatLng()) <= selection.radius;
+}
+
+// Phones show every BIXI station. Computers show none until a place is chosen, then only those inside its circle.
 function refilter() {
   stationsLayer.clearLayers();
+  const waiting = !isPhone && !selection;
   allStations.forEach(function (layer) {
-    if (!nearOnly || layer.feature.properties.near_metro) { stationsLayer.addLayer(layer); }
+    if (waiting) { return; }
+    if (nearOnly && !layer.feature.properties.near_metro) { return; }
+    if (!isPhone && !inSelection(layer)) { return; }
+    stationsLayer.addLayer(layer);
   });
   const shown = stationsLayer.getLayers().length;
   const countEl = document.getElementById('count');
   if (!countEl) { return; }   // the live feed failed and the status line was replaced
-  countEl.textContent = nearOnly
-    ? shown + ' of ' + allStations.length + ' stations within ' + WALK_M + ' m of a metro'
-    : allStations.length + ' stations';
+  if (waiting) {
+    countEl.textContent = allStations.length + ' BIXI stations. Choose your location or a métro station to see them';
+  } else if (!isPhone) {
+    countEl.textContent = shown + ' BIXI station' + (shown === 1 ? '' : 's') + ' within ' + selection.radius +
+      ' m of ' + selection.label + (nearOnly ? ' (only those near a metro)' : '');
+  } else {
+    countEl.textContent = nearOnly
+      ? shown + ' of ' + allStations.length + ' stations within ' + WALK_M + ' m of a metro'
+      : allStations.length + ' stations';
+  }
+}
+
+// Draws (or moves) the one circle, shows the BIXI stations inside it and zooms to it.
+function selectArea(latlng, radius, label) {
+  selection = { latlng: latlng, radius: radius, label: label };
+  if (selectCircle) {
+    selectCircle.setLatLng(latlng).setRadius(radius);
+  } else {
+    selectCircle = L.circle(latlng, {
+      radius: radius, pane: 'selectArea', interactive: false,
+      color: '#1F2D5A', weight: 2, fillColor: '#1F2D5A', fillOpacity: 0.08
+    }).addTo(map);
+  }
+  refilter();
+  map.fitBounds(latlng.toBounds(radius * 2), { padding: [20, 20], animate: false });
+}
+
+function selectMetro(layer) {
+  selectArea(layer.getLatLng(), METRO_RADIUS_M, 'Métro ' + layer.feature.properties.metro_name);
 }
 
 function restyle() {
@@ -383,8 +436,12 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), metroFile])
     // Metro stations: a square in the line's colour; transfer stations get a black outline.
     metroLayer = metros && L.geoJSON(metros, {
       pointToLayer: function (feature, latlng) {
+        const lines = feature.properties.lines.split(' / ');
+        if (!isPhone) {
+          return L.circleMarker(latlng, Object.assign({ pane: 'metroStops' }, metroDotStyle(lines, false)));
+        }
         return L.marker(latlng, {
-          icon: metroIcon(feature.properties.lines.split(' / '), false),
+          icon: metroIcon(lines, false),
           title: 'Métro ' + feature.properties.metro_name,
           zIndexOffset: 1000
         });
@@ -392,6 +449,8 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), metroFile])
       onEachFeature: function (feature, layer) {
         metroById[feature.properties.metro_id] = layer;
         layer.bindPopup(function () { return metroPopup(feature.properties, layer.getLatLng()); });
+        if (!isPhone) { layer.bindTooltip('Métro ' + feature.properties.metro_name, { direction: 'top', offset: [0, -4] }); }
+        layer.on('click', function () { selectMetro(layer); });
       }
     });
     if (metroLayer) { drawMetroLines(); }
@@ -399,7 +458,7 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), metroFile])
     const bixiLayer = L.geoJSON(data, {
       pointToLayer: function (feature, latlng) {
         return L.circleMarker(latlng, {
-          radius: 5, weight: 1, color: '#ffffff', fillOpacity: 0.9, fillColor: '#999999'
+          radius: isPhone ? 5 : 3.5, weight: 1, color: '#ffffff', fillOpacity: 0.9, fillColor: '#999999'
         });
       },
       onEachFeature: function (feature, layer) {
@@ -412,6 +471,8 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), metroFile])
     if (metroLayer) { metroLayer.addTo(map); }
 
     addControls();
+    addLocateControl();
+    setUpFindBox(metros);
     document.getElementById('status').innerHTML = '<span id="count"></span>, loading live availability...' + metroNote();
     refilter();
     loadStatus();
@@ -470,10 +531,102 @@ function addControls() {
       classes.map(function (c) {
         return '<span style="background:' + c.colour + '"></span>' + c.label;
       }).join('<br>') +
-      '<br><span class="metro-key">M</span>Metro station' +
-      '<br><span class="down-key">M</span>Station affected by a disruption' +
+      (isPhone ? '<br><span class="metro-key">M</span>Metro station' +
+        '<br><span class="down-key">M</span>Station affected by a disruption'
+        : '<br><span class="metro-key round"></span>Metro station (white: transfer)' +
+        '<br><span class="down-key round"></span>Station affected by a disruption') +
+      '<br><span class="area-key"></span>Area you chose' +
       '<br><span class="line-key"></span>Disrupted stretch of line' +
       '<br><span class="line-key dashed"></span>Disruption, stations unknown');
   };
   legend.addTo(map);
+}
+
+// Messages about finding a place go to the map button and to the yellow box in the side panel.
+let locateDot, locateMsg;
+
+function setFindMessage(text) {
+  [locateMsg, document.getElementById('find-msg')].forEach(function (el) { if (el) { el.textContent = text; } });
+}
+
+function startLocate() {
+  setFindMessage('Finding your location...');
+  map.locate({ setView: false, enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+}
+
+// "Show my location": a button under the zoom buttons. It asks for the location only when clicked.
+function addLocateControl() {
+  const control = L.control({ position: 'topleft' });
+  control.onAdd = function () {
+    const div = L.DomUtil.create('div', 'locate');
+    div.innerHTML = '<button type="button" class="locate-button" title="Show my location" ' +
+      'aria-label="Show my location and the BIXI stations within ' + LOCATE_RADIUS_M + ' m">' +
+      '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">' +
+      '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/>' +
+      '<path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>' +
+      '<p class="locate-msg" aria-live="polite"></p>';
+    locateMsg = div.querySelector('.locate-msg');
+    div.querySelector('button').addEventListener('click', startLocate);
+    L.DomEvent.disableClickPropagation(div);
+    return div;
+  };
+  control.addTo(map);
+
+  map.on('locationfound', function (e) {
+    if (!MONTREAL_BOUNDS.contains(e.latlng)) {
+      setFindMessage('You seem to be outside Montréal, so the map stays where it is.');
+      return;
+    }
+    if (locateDot) {
+      locateDot.setLatLng(e.latlng);
+    } else {
+      locateDot = L.circleMarker(e.latlng, {
+        radius: 7, weight: 3, color: '#ffffff', fillColor: '#1a73e8', fillOpacity: 1
+      }).addTo(map);
+    }
+    locateDot.bindPopup('<strong>You are here</strong><br><small>Accurate to about ' +
+      Math.round(e.accuracy) + ' m</small>');
+    map.closePopup();   // e.g. a metro popup from an earlier choice
+    selectArea(e.latlng, LOCATE_RADIUS_M, 'you');
+    setFindMessage('Showing ' + LOCATE_RADIUS_M + ' m around you.');
+  });
+
+  map.on('locationerror', function (e) {
+    setFindMessage(e.code === 1
+      ? 'Location access was blocked. You can allow it in your browser settings.'
+      : 'Your location could not be found. Try again in a moment.');
+  });
+}
+
+// The yellow box in the side panel: "Use my location" and the metro station search.
+function setUpFindBox(metros) {
+  document.getElementById('find-me').addEventListener('click', startLocate);
+  const form = document.getElementById('metro-search');
+  if (!metros) {
+    form.hidden = true;
+    return;
+  }
+  const names = Object.keys(metroById).map(function (id) { return metroById[id].feature.properties.metro_name; })
+    .sort(function (a, b) { return a.localeCompare(b, 'fr'); });
+  const list = document.getElementById('metro-names');
+  names.forEach(function (name) {
+    const option = document.createElement('option');
+    option.value = name;
+    list.appendChild(option);
+  });
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    const typed = normalise(document.getElementById('metro-input').value);
+    if (!typed.trim()) { setFindMessage('Type the name of a métro station.'); return; }
+    const ids = Object.keys(metroById);
+    const nameOf = function (id) { return normalise(metroById[id].feature.properties.metro_name); };
+    const id = ids.find(function (i) { return nameOf(i) === typed; }) ||
+      ids.find(function (i) { return nameOf(i).indexOf(typed) > -1; });
+    if (!id) { setFindMessage('No métro station matches that name. Pick one from the list.'); return; }
+    const layer = metroById[id];
+    selectMetro(layer);
+    layer.openPopup();
+    setFindMessage('Showing ' + METRO_RADIUS_M + ' m around Métro ' + layer.feature.properties.metro_name + '.');
+  });
 }

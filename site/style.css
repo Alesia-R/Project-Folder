@@ -10,6 +10,8 @@ header p { margin: 4px 0 0; font-size: 14px; color: #DCBD23; }
 .panel strong { display: block; margin-bottom: 2px; }
 .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
 .panel hr { border: 0; border-top: 1px solid #ddd; margin: 6px 0; }
+/* The marker is a 24 px tap area; the visible 14 px square sits in its centre. */
+.metro { display: flex; align-items: center; justify-content: center; }
 .metro span { display: block; width: 14px; height: 14px; border: 1px solid #fff; border-radius: 3px;
   color: #fff; font: bold 10px/14px Arial, sans-serif; text-align: center; box-shadow: 0 0 2px rgba(0,0,0,.6); }
 .metro.transfer span { border: 2px solid #000; width: 12px; height: 12px; line-height: 12px; }
@@ -45,3 +47,37 @@ main #map { flex: 1; height: auto; }
 .panel.collapsed .panel-toggle .arrow { transform: rotate(-135deg); margin-top: 3px; }
 .panel.collapsed .panel-body { display: none; }
 .panel-toggle:focus-visible { outline: 2px solid #1F2D5A; outline-offset: 2px; }
+
+/* "Show my location" button (44 px) and its message */
+.locate { display: flex; align-items: flex-start; gap: 6px; }
+.locate-button { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0;
+  background: #fff; color: #1F2D5A; border: 2px solid rgba(0,0,0,.2); background-clip: padding-box; border-radius: 4px; cursor: pointer; }
+.locate-button:hover { background-color: #f4f4f4; }
+.locate-button:focus-visible { outline: 2px solid #1F2D5A; outline-offset: 2px; }
+.locate-msg { margin: 0; max-width: 220px; padding: 6px 8px; background: #fff; border-radius: 4px; font-size: 13px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.locate-msg:empty { display: none; }
+
+/* Phones: bigger zoom buttons and attribution links */
+@media (max-width: 700px) {
+  .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 24px; }
+  .leaflet-control-attribution a { display: inline-block; min-height: 24px; line-height: 24px; padding: 0 2px; }
+}
+
+/* Computers: round metro dots and the chosen-area circle in the legend */
+.legend .metro-key.round, .legend .down-key.round { width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; }
+.legend .metro-key.round { background: #00B300; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #999; }
+.legend .down-key.round { background: #d62728; border: 2px solid #7a0000; }
+.legend .area-key { width: 12px; height: 12px; vertical-align: -2px; background: rgba(31,45,90,.08); border: 2px solid #1F2D5A; }
+
+/* The yellow "choose your location" box at the top of the side panel */
+.find-box { margin: 12px 0 4px; padding: 10px 12px; background: #FFF4C2; border: 1px solid #DCBD23; border-left: 5px solid #DCBD23; border-radius: 4px; }
+.find-box p { margin: 0 0 8px; }
+.find-box button, .find-box input { min-height: 32px; font: inherit; }
+.find-box button { padding: 4px 12px; border: 1px solid #1F2D5A; border-radius: 4px; background: #1F2D5A; color: #fff; cursor: pointer; }
+.find-box label { display: block; margin: 10px 0 4px; }
+.search-row { display: flex; gap: 6px; }
+.search-row input { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid #888; border-radius: 4px; }
+.find-box button:focus-visible, .find-box input:focus-visible { outline: 2px solid #1F2D5A; outline-offset: 2px; }
+#find-msg:empty { display: none; }
+#find-msg { margin: 8px 0 0; }

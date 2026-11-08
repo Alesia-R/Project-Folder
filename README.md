@@ -76,13 +76,6 @@ bixi-metro-mvp/
 Then, IF the metro station is down, I highlighted them in red, IF multiple sequential stations are down, I made the affected segment red. In the future, I will fix the bus data coming from the API to be connected to a busstop.sph in order to see the radius of metro stops that may also be down.  
 
 ## A3 card and three tests
- 1. 
- 2. 
- 3. 
-
-## Pre-flight report 
-(Lab 7) | Check | Result | What I did | 
-| --- | --- | --- | 
 | 1. Cold start | pass / fault: It passed, no red lines. 
 
 | 2. Read every label | 

@@ -15,6 +15,20 @@
 
   <main>
     <aside id="story">
+      <div class="find-box">
+        <p><strong>Choose your location to see the transit available around you.</strong></p>
+        <button type="button" id="find-me">Use my location</button>
+        <form id="metro-search" role="search">
+          <label for="metro-input">Or find a métro station</label>
+          <div class="search-row">
+            <input id="metro-input" list="metro-names" autocomplete="off" placeholder="e.g. Berri-UQAM">
+            <button type="submit">Go</button>
+          </div>
+          <datalist id="metro-names"></datalist>
+        </form>
+        <p id="find-msg" class="small" aria-live="polite"></p>
+      </div>
+
       <!-- STORY: my words. -->
       <h2>Who it is for</h2>
       <p>The average commuter in Montréal, especially in high-density areas where many types of transport come together.</p>
@@ -24,7 +38,7 @@
       <p>Looking at the metro together with Bixi availability gives people faster access to real-time data, in one place, so they can pick the quickest option themselves.</p>
 
       <h2>What you can do here</h2>
-      <p>Choose <strong>take a bike</strong> or <strong>return a bike</strong> (top right). Every Bixi station is coloured by how many bikes or free docks it has right now. Click a metro station (the coloured <strong>M</strong>) to see the Bixi bikes and docks within a 4-minute walk (300 m).</p>
+      <p>Choose <strong>take a bike</strong> or <strong>return a bike</strong> (top right). Every Bixi station is coloured by how many bikes or free docks it has right now. Click a metro station (a coloured dot, or an <strong>M</strong> on phones) or search for one at the top of this panel to see the Bixi bikes and docks within a 4-minute walk (300 m).</p>
 
       <h2>Live STM service status</h2>
       <p id="stm-updated" class="small">Loading STM service status...</p>
