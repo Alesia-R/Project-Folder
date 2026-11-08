@@ -55,6 +55,7 @@ let metroById = {};      // metro_id -> marker
 let disruptionLayer;     // red segments and dashed lines drawn over the metro lines
 let selection = null;    // { latlng, radius, label }: the circle chosen by location, metro click or search
 let selectCircle;        // the circle drawn for it
+let bixiMissing = false; // the BIXI station file did not load: the map shows only the metro and STM status
 let metroAlerts = [];    // { kind: 'disruption' | 'notice', title, description, lines, stations, wholeLine }
 
 function countFor(s) {
@@ -104,6 +105,7 @@ function metroPopup(p, latlng) {
     html += '<br><strong>STM notice' + (notices.length > 1 ? 's' : '') + ':</strong>' +
       notices.map(function (alert) { return '<br><small>' + escapeHTML(alert.description) + '</small>'; }).join('');
   }
+  if (bixiMissing) { return html + '<br><em>BIXI stations could not be loaded</em>'; }
   if (stations === 0) { return html + '<br><em>No BIXI station within ' + WALK_M + ' m</em>'; }
   return html + '<br>' + stations + ' BIXI station' + (stations > 1 ? 's' : '') + ' within ' + WALK_M + ' m (' +
     p.docks_nearby + ' docks)<br>Right now: ' + bikes + ' bikes, ' + docks + ' free docks';
@@ -428,10 +430,18 @@ const metroFile = getJSON('../data/metro_stations.geojson').catch(function (err)
   return null;
 });
 
-Promise.all([getJSON('../data/bixi_stations.geojson'), metroFile])
+// The BIXI file is optional too: if it fails, the metro stations, lines and STM service status still show.
+const bixiFile = getJSON('../data/bixi_stations.geojson').catch(function (err) {
+  console.error(err);
+  return null;
+});
+
+Promise.all([bixiFile, metroFile])
   .then(function (results) {
     const data = results[0];
     const metros = results[1];
+    if (!data && !metros) { throw new Error('Neither the BIXI nor the metro station file could be loaded.'); }
+    bixiMissing = !data;
 
     // Metro stations: a square in the line's colour; transfer stations get a black outline.
     metroLayer = metros && L.geoJSON(metros, {
@@ -455,7 +465,7 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), metroFile])
     });
     if (metroLayer) { drawMetroLines(); }
 
-    const bixiLayer = L.geoJSON(data, {
+    const bixiLayer = L.geoJSON(data || [], {
       pointToLayer: function (feature, latlng) {
         return L.circleMarker(latlng, {
           radius: isPhone ? 5 : 3.5, weight: 1, color: '#ffffff', fillOpacity: 0.9, fillColor: '#999999'
@@ -473,16 +483,21 @@ Promise.all([getJSON('../data/bixi_stations.geojson'), metroFile])
     addControls();
     addLocateControl();
     setUpFindBox(metros);
-    document.getElementById('status').innerHTML = '<span id="count"></span>, loading live availability...' + metroNote();
-    refilter();
-    loadStatus();
-    setInterval(loadStatus, REFRESH_MS);
+    if (bixiMissing) {
+      document.getElementById('status').textContent = 'The BIXI station file could not be loaded, so only métro ' +
+        'stations and STM service status are shown. Try reloading the page.';
+    } else {
+      document.getElementById('status').innerHTML = '<span id="count"></span>, loading live availability...' + metroNote();
+      refilter();
+      loadStatus();
+      setInterval(loadStatus, REFRESH_MS);
+    }
     loadMetroStatus();
     setInterval(loadMetroStatus, STM_REFRESH_MS);
   })
   .catch(function (err) {
     document.getElementById('status').textContent =
-      'Could not load the Bixi station file, so the map cannot show any stations. Try reloading the page.';
+      'Could not load the BIXI or the metro station file, so the map cannot show any stations. Try reloading the page.';
     document.getElementById('stm-updated').textContent =
       'STM service status was not checked, because the map could not load its station data. Try reloading the page.';
     console.error(err);
