@@ -75,7 +75,7 @@ bixi-metro-mvp/
 - Today I will fix: I changed the display first and organized them in a way that presents all the stops as connected per line. For example, all greens tops, conencted with a through green line. 
 Then, IF the metro station is down, I highlighted them in red, IF multiple sequential stations are down, I made the affected segment red. In the future, I will fix the bus data coming from the API to be connected to a busstop.sph in order to see the radius of metro stops that may also be down.  
 
-## A3 card and three tests
+## A3 card with all test cases
 | 1. Cold start | pass / fault: It passed, no red lines. 
 
 | 2. Read every label | 
@@ -119,4 +119,51 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
   - "Touch targets do not have sufficient size or spacing." 
   - "Identical links have the same purpose."
 
-  I changed the sizing of the touch targets, and fixed the links. I also changed the basemap credit to be correct. 
+  I changed the sizing of the touch targets, and fixed the links. I also changed the basemap credit to be correct. Scored 100 afterwards. 
+
+## Lines that do the work
+  - app.js lines 476-487 are the ones that fetch both the GeoJSON files and ensures that if one failes the map still runs with the other. 
+  - app.js line 451 is the key join since it matches live bikes and docks to stations by station_id 
+  - app.js lines 77-86 counts bikes or docks dependant on "take" or "return" mode, and picks the colour class for the donut chart. 
+  - app.js lines 558-561 refreshes the Bixi and STM data ever 60 seconds so that it stays relevant. 
+  app.js line 198 is the core logic. It keeps only the metro alerts and decides whether each one is a station notice or a line disruption, and works out which station it affects 
+  - app.js line 177 and 184 find the affected stations, either from STM stop codes or from station names in the alert text 
+  - app.js line 316 turns affected stations and stretches of the metro line red on the map 
+  ## (specifically for the A3 feature)
+  - app.js lines 748-768 are where the slider sets walkM, then resizes the circle and recalculates everything 
+  - apps.js line 417 draws the dashes circle, filters the station and zooms to it. It runs for your location (app.js line 665), a metro click andthe search (app.js line 708)
+  - app.js lie 830 is the geometry of that circle. It splits the circle between nearby stations so each bit of land belongs to its nearest station, then measures each piece's area in m2
+  - line 781 is the one line split. It keeps the part of the shape that is closer to station A than to station B
+  - line 880 adds up the area of each kind of land and draws the patches, then makes the donut (line 956) and the "top modes" and "right now" lists it. 
+
+## What I do not yet fully understand 
+  - I do not yet fully understand how to connect the donut chart to a larger issue of resistance, which is what I was planning to do in the first place. I wonder if I can show a trend of transit-driven gentrification with the donut chart or in another form, since there are obvious pockets of disconnection in certain areas. I wonder if the morpho-code layout is the best way to show this. I also need to connect land-use data to the basemap so that the slider shows blocks/area instead of the shapes. 
+
+## A3 ai disclosure, written as process
+- I used Claude Code (Claude Opus 5.5, Anthropic) inside VS Code as a coding assistant for A3. The idea, data sources, notebook pipeline and design decisions are mine. Claude wrote most of the new JavaScript and CSS from my instructions. My process:
+
+  1. Accessibility audit. Lighthouse kept reporting "Touch targets do not have sufficient size or spacing." I asked Claude to diagnose it. It found that the overlapping metro markers were the cause and that Lighthouse was testing a cached copy of my page. It also measured the flagged elements in a headless browser. I decided on the fixes: larger tap areas, round metro dots on desktop, and "M" icons on phones only when zoomed in.
+
+  2. Location and search. I asked for a "use my location" feature, a circle around the chosen place, and a métro station search. I asked Claude to propose a plan before changing anything, and I approved it before any code was written. Claude implemented it, and I chose how the desktop view behaves (no Bixi stations until a place is chosen).
+
+  3. Phone layout. I asked for the map to fill most of the phone screen, a "More information" tab, and closed panels on first load. Claude built these and tested them at iPhone size.
+
+  4. Walking-distance explorer (main A3 feature). I gave Claude a screenshot of the Morphocode Explorer as a reference for layout, colours and type. Claude proposed the design and asked me questions, and I chose:
+   - the donut chart shows share of land
+   - the circle stays empty until a place is chosen
+   - the story text goes in an "About this map" section
+    Claude wrote:
+    - the slider
+    - the land split by nearest station (Voronoi cells cut to the circle)
+    - the area calculations, the donut chart and the panel
+
+  5. Fixes. When Bixi stations stopped being clickable, I reported it and Claude found the cause (one map layer catching all the clicks) and fixed it. I also asked for:
+  - lighter patches, so the streets show through
+  - the location message to disappear on phones
+  - one monospace font everywhere
+  - the map to still show the métro if the Bixi file fails
+  
+  6. Checking. After each change, Claude tested the page in headless Chrome at desktop and phone sizes. It checked for errors, clicked stations and compared the area totals. I reviewed the screenshots and ran Lighthouse and the site on my own phone. I also made some changes myself, including the header colour and moving the STM status section.
+
+  Claude did not generate or change any data, that was all me. 
+
