@@ -1070,65 +1070,202 @@ function issueCard(kind, heading, text, small) {
   return card;
 }
 
-function showTrip(fromId, toId) {
-  const path = metroRoute(fromId, toId);
-  const msg = document.getElementById('trip-msg');
-  if (!path) { msg.textContent = 'No métro route found between those stations.'; return; }
-  const legs = routeLegs(path);
-  const routeIds = new Set(path.map(function (step) { return step.id; }));
-  const routeLines = legs.map(function (leg) { return leg.line; });
-  msg.textContent = '';
+// ---- Addresses: OpenStreetMap's Nominatim, only when "Check my route" is pressed ----
+// Its rules: at most one request a second, and credit OpenStreetMap. Results are kept so repeats are free.
+const GEOCODE_URL = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ca&bounded=1' +
+  '&accept-language=en&viewbox=-74.05,45.75,-73.35,45.35&q=';
+const geocodeCache = {};
+let nextGeocodeAt = 0;
 
-  // The legs: "Blue line · Fabre → Jean-Talon · 3 stops"
-  const list = document.getElementById('trip-legs');
-  list.replaceChildren();
-  legs.forEach(function (leg) {
-    list.appendChild(listItem(lineColours[leg.line], leg.line + ' line: ' + metroName(leg.ids[0]) + ' → ' +
-      metroName(leg.ids[leg.ids.length - 1]), (leg.ids.length - 1) + ' stop' + (leg.ids.length === 2 ? '' : 's')));
+function geocode(text) {
+  const key = normalise(text);
+  if (geocodeCache[key]) { return Promise.resolve(geocodeCache[key]); }
+  const wait = Math.max(0, nextGeocodeAt - Date.now());
+  nextGeocodeAt = Date.now() + wait + 1100;
+  return new Promise(function (resolve) { setTimeout(resolve, wait); })
+    .then(function () { return fetch(GEOCODE_URL + encodeURIComponent(text)); })
+    .then(function (response) {
+      if (!response.ok) { throw new Error('HTTP ' + response.status + ' from the address search'); }
+      return response.json();
+    })
+    .then(function (results) {
+      if (!results.length) { return null; }
+      const place = { latlng: L.latLng(Number(results[0].lat), Number(results[0].lon)),
+        label: results[0].display_name.split(',').slice(0, 3).join(',').trim() };
+      geocodeCache[key] = place;
+      return place;
+    });
+}
+
+// A métro station name typed exactly is used as the station; anything else is looked up as an address.
+function resolvePlace(text) {
+  const typed = normalise(text);
+  const id = Object.keys(metroById).find(function (i) { return normalise(metroName(i)) === typed; });
+  if (id) { return Promise.resolve({ latlng: metroById[id].getLatLng(), label: 'Métro ' + metroName(id), stationId: id }); }
+  return geocode(text);
+}
+
+// The few métro stations closest to a place (the closest one is always included).
+function nearestStations(latlng, count) {
+  return Object.keys(metroById)
+    .map(function (id) { return { id: id, d: map.distance(latlng, metroById[id].getLatLng()) }; })
+    .sort(function (a, b) { return a.d - b.d; })
+    .filter(function (x, i) { return i === 0 || x.d <= 2000; })
+    .slice(0, count);
+}
+
+const STOP_MIN = 2, CHANGE_MIN = 5;   // rough métro times, only used to choose between stations
+
+// The best plan: walk to a station, ride, walk from a station; or simply walk if that is quicker.
+function planTrip(from, to) {
+  const starts = from.stationId ? [{ id: from.stationId, d: 0 }] : nearestStations(from.latlng, 3);
+  const ends = to.stationId ? [{ id: to.stationId, d: 0 }] : nearestStations(to.latlng, 3);
+  let best = null;
+  starts.forEach(function (a) {
+    ends.forEach(function (b) {
+      if (a.id === b.id) { return; }
+      const path = metroRoute(a.id, b.id);
+      if (!path) { return; }
+      const legs = routeLegs(path);
+      const stops = legs.reduce(function (n, leg) { return n + leg.ids.length - 1; }, 0);
+      const minutes = (a.d + b.d) / WALK_M_PER_MIN + stops * STOP_MIN + (legs.length - 1) * CHANGE_MIN;
+      if (!best || minutes < best.minutes) {
+        best = { fromId: a.id, toId: b.id, walkStart: a.d, walkEnd: b.d, path: path, legs: legs, minutes: minutes };
+      }
+    });
   });
+  const direct = map.distance(from.latlng, to.latlng);
+  if (!best || direct / WALK_M_PER_MIN <= best.minutes) { return { walkOnly: true, direct: direct }; }
+  return best;
+}
 
-  // Only the alerts on this route, named by line or station instead of STM's "Your line" / "Your stop".
+function walkText(metres) {
+  const distance = metres >= 1000 ? (metres / 1000).toFixed(1) + ' km' : (Math.round(metres / 10) * 10) + ' m';
+  return 'about ' + distance + ' (' + Math.max(1, Math.round(metres / WALK_M_PER_MIN)) + ' min)';
+}
+
+function terminusFor(leg) {
+  const order = lineOrder[leg.line];
+  const forward = order.indexOf(leg.ids[leg.ids.length - 1]) > order.indexOf(leg.ids[0]);
+  return metroName(forward ? order[order.length - 1] : order[0]);
+}
+
+// One numbered direction: a coloured circle, the instruction, and optionally the stops along the way.
+function stepItem(colour, text, stops) {
+  const li = document.createElement('li');
+  li.style.setProperty('--step-colour', colour);
+  if (colour === lineColours.Yellow) { li.className = 'dark-text'; }   // a white number would not show on yellow
+  li.appendChild(document.createTextNode(text));
+  if (stops) {
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Show the ' + stops.length + ' stations';
+    const list = document.createElement('ol');
+    list.className = 'stop-list';
+    stops.forEach(function (name) { const s = document.createElement('li'); s.textContent = name; list.appendChild(s); });
+    details.append(summary, list);
+    li.appendChild(details);
+  }
+  return li;
+}
+
+function showTrip(from, to) {
+  const plan = planTrip(from, to);
+  const steps = document.getElementById('trip-steps');
   const issues = document.getElementById('trip-issues');
+  steps.replaceChildren();
   issues.replaceChildren();
-  metroAlerts.forEach(function (alert) {
-    const onRoute = alert.stations.filter(function (id) { return routeIds.has(id); });
-    const lineHit = alert.wholeLine && alert.lines.some(function (line) { return routeLines.indexOf(line) > -1; });
-    if (!onRoute.length && !lineHit) { return; }
-    const where = onRoute.length
-      ? onRoute.map(metroName).join(', ') + (alert.kind === 'notice' ? ' station' : '')
-      : alert.lines.filter(function (line) { return routeLines.indexOf(line) > -1; }).join(', ') + ' line';
-    issues.appendChild(issueCard(alert.kind, (alert.kind === 'disruption' ? 'Disruption: ' : 'Station notice: ') + where,
-      alert.description, untilText(alert.until)));
+  const WALK_COLOUR = '#555555';
+
+  if (plan.walkOnly) {
+    steps.appendChild(stepItem(WALK_COLOUR, 'Walk ' + walkText(plan.direct) + ' from ' + from.label + ' to ' + to.label +
+      '. Walking is quicker than taking the métro for this trip.'));
+  } else {
+    if (plan.walkStart) {
+      steps.appendChild(stepItem(WALK_COLOUR, 'Walk ' + walkText(plan.walkStart) + ' from ' + from.label + ' to ' +
+        metroName(plan.fromId) + ' station.'));
+    }
+    plan.legs.forEach(function (leg, n) {
+      const first = metroName(leg.ids[0]), last = metroName(leg.ids[leg.ids.length - 1]);
+      const ride = leg.ids.length - 1;
+      steps.appendChild(stepItem(lineColours[leg.line],
+        (n === 0 ? 'At ' + first + ', take' : 'At ' + first + ', change to') + ' the ' + leg.line + ' line toward ' +
+        terminusFor(leg) + '. Ride ' + ride + ' stop' + (ride === 1 ? '' : 's') + ' and get off at ' + last + '.',
+        leg.ids.map(metroName)));
+    });
+    if (plan.walkEnd) {
+      steps.appendChild(stepItem(WALK_COLOUR, 'Walk ' + walkText(plan.walkEnd) + ' from ' + metroName(plan.toId) +
+        ' station to ' + to.label + '.'));
+    }
+    steps.appendChild(stepItem('#111111', 'Arrive at ' + to.label + '.'));
+
+    // Only the alerts on this route, named by line or station instead of STM's "Your line" / "Your stop".
+    const routeIds = new Set(plan.path.map(function (step) { return step.id; }));
+    const routeLines = plan.legs.map(function (leg) { return leg.line; });
+    metroAlerts.forEach(function (alert) {
+      const onRoute = alert.stations.filter(function (id) { return routeIds.has(id); });
+      const lineHit = alert.wholeLine && alert.lines.some(function (line) { return routeLines.indexOf(line) > -1; });
+      if (!onRoute.length && !lineHit) { return; }
+      const where = onRoute.length
+        ? onRoute.map(metroName).join(', ') + (alert.kind === 'notice' ? ' station' : '')
+        : alert.lines.filter(function (line) { return routeLines.indexOf(line) > -1; }).join(', ') + ' line';
+      issues.appendChild(issueCard(alert.kind, (alert.kind === 'disruption' ? 'Disruption: ' : 'Station notice: ') + where,
+        alert.description, untilText(alert.until)));
+    });
+  }
+
+  // A place far from every métro station is often the wrong match for a name (e.g. another campus).
+  const FAR_M = 2000;
+  [[from, plan.walkOnly ? 0 : plan.walkStart], [to, plan.walkOnly ? 0 : plan.walkEnd]].forEach(function (pair) {
+    if (pair[1] > FAR_M) {
+      issues.prepend(issueCard('notice', 'Check this place: ' + pair[0].label,
+        'It is ' + walkText(pair[1]).split(' (')[0] + ' from the nearest métro station. ' +
+        'If this is not the place you meant, add a street number or the neighbourhood.', ''));
+    }
   });
 
-  // Bixi at both ends: bikes to start with, docks to finish with.
+  // Bixi at both ends: bikes where you start, docks where you finish.
   if (!bixiMissing) {
-    const start = nearbyBixi(metroById[fromId].getLatLng());
-    const end = nearbyBixi(metroById[toId].getLatLng());
+    const start = nearbyBixi(from.latlng);
+    const end = nearbyBixi(to.latlng);
     if (!start.bikes) {
-      issues.appendChild(issueCard('notice', 'Bixi: no bikes near ' + metroName(fromId),
-        'No Bixi bikes available within ' + walkM + ' m of the start right now.', ''));
+      issues.appendChild(issueCard('notice', 'Bixi: no bikes near ' + from.label,
+        'No Bixi bikes available within ' + walkM + ' m of where you start right now.', ''));
     }
     if (!end.docks) {
-      issues.appendChild(issueCard('notice', 'Bixi: no free docks near ' + metroName(toId),
-        'No free Bixi docks within ' + walkM + ' m of the end right now, so you may not be able to return a bike there.', ''));
+      issues.appendChild(issueCard('notice', 'Bixi: no free docks near ' + to.label,
+        'No free Bixi docks within ' + walkM + ' m of where you finish right now, so you may not be able to return a bike there.', ''));
     }
     issues.appendChild(issueCard('ok', 'Bixi backup', null, 'Within ' + walkM + ' m: ' + start.bikes + ' bikes near ' +
-      metroName(fromId) + ', ' + end.docks + ' free docks near ' + metroName(toId) + '.'));
+      from.label + ', ' + end.docks + ' free docks near ' + to.label + '.'));
   }
   if (!issues.querySelector('.stm-alert:not(.ok)')) {
-    issues.prepend(issueCard('ok', 'No STM disruptions or notices on your route right now.', null, ''));
+    issues.prepend(issueCard('ok', plan.walkOnly ? 'No métro needed for this trip.'
+      : 'No STM disruptions or notices on your route right now.', null, ''));
   }
   document.getElementById('trip-result').hidden = false;
 
-  // Highlight the route on the map, under the coloured lines, and zoom to it.
+  // On the map: start and end points, dashed walking lines, and the métro route highlighted under the coloured lines.
   if (!routeLayer) { routeLayer = L.layerGroup().addTo(map); }
   routeLayer.clearLayers();
-  legs.forEach(function (leg) {
-    L.polyline(latLngsFor(leg.ids), { pane: 'selectArea', interactive: false, color: '#111111', weight: 10, opacity: 0.3 })
+  const walk = { pane: 'selectArea', interactive: false, color: '#111111', weight: 2, dashArray: '2 6' };
+  const points = [from.latlng, to.latlng];
+  if (plan.walkOnly) {
+    L.polyline(points, walk).addTo(routeLayer);
+  } else {
+    L.polyline([from.latlng, metroById[plan.fromId].getLatLng()], walk).addTo(routeLayer);
+    L.polyline([metroById[plan.toId].getLatLng(), to.latlng], walk).addTo(routeLayer);
+    plan.legs.forEach(function (leg) {
+      L.polyline(latLngsFor(leg.ids), { pane: 'selectArea', interactive: false, color: '#111111', weight: 10, opacity: 0.3 })
+        .addTo(routeLayer);
+      latLngsFor(leg.ids).forEach(function (p) { points.push(p); });
+    });
+  }
+  [from.latlng, to.latlng].forEach(function (p, n) {
+    L.circleMarker(p, { interactive: false, radius: 7, weight: 3, color: '#ffffff', fillColor: n ? '#c0261f' : '#111111', fillOpacity: 1 })
       .addTo(routeLayer);
   });
-  map.fitBounds(L.latLngBounds(latLngsFor(Array.from(routeIds))), { padding: [40, 40] });
+  map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
 }
 
 function setUpTripCheck(metros) {
@@ -1141,10 +1278,26 @@ function setUpTripCheck(metros) {
   form.addEventListener('submit', function (event) {
     event.preventDefault();
     const msg = document.getElementById('trip-msg');
-    const fromId = findMetroId(document.getElementById('trip-from').value);
-    const toId = findMetroId(document.getElementById('trip-to').value);
-    if (!fromId || !toId) { msg.textContent = 'Pick both stations from the list.'; return; }
-    if (fromId === toId) { msg.textContent = 'Those are the same station.'; return; }
-    showTrip(fromId, toId);
+    const button = form.querySelector('button');
+    const fromText = document.getElementById('trip-from').value.trim();
+    const toText = document.getElementById('trip-to').value.trim();
+    if (!fromText || !toText) { msg.textContent = 'Type where you start and where you are going.'; return; }
+    msg.textContent = 'Looking up your addresses...';
+    button.disabled = true;
+    // One after the other, so the address search gets at most one request a second.
+    resolvePlace(fromText).then(function (from) {
+      return resolvePlace(toText).then(function (to) { return [from, to]; });
+    }).then(function (places) {
+      const missing = [fromText, toText].filter(function (t, i) { return !places[i]; });
+      if (missing.length) {
+        msg.textContent = 'Could not find "' + missing.join('" or "') + '" in Montréal. Try adding a street number or the neighbourhood.';
+        return;
+      }
+      msg.textContent = '';
+      showTrip(places[0], places[1]);
+    }).catch(function (err) {
+      console.error(err);
+      msg.textContent = 'The address search is not available right now. You can still type métro station names.';
+    }).finally(function () { button.disabled = false; });
   });
 }

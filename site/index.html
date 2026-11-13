@@ -55,10 +55,10 @@
       <section class="block trip-box">
         <h2 class="section-title">Check a trip</h2>
         <form id="trip-form">
-          <label for="trip-from">From (métro station)</label>
-          <input id="trip-from" list="metro-names" autocomplete="off" placeholder="e.g. Fabre">
-          <label for="trip-to">To (métro station)</label>
-          <input id="trip-to" list="metro-names" autocomplete="off" placeholder="e.g. Atwater">
+          <label for="trip-from">From (address, place or métro station)</label>
+          <input id="trip-from" list="metro-names" autocomplete="off" placeholder="e.g. 7000 Av. du Parc">
+          <label for="trip-to">To (address, place or métro station)</label>
+          <input id="trip-to" list="metro-names" autocomplete="off" placeholder="e.g. 3415 Rue Sainte-Catherine E">
           <button type="submit">Check my route</button>
         </form>
         <p id="trip-msg" class="small" aria-live="polite"></p>
@@ -66,10 +66,10 @@
 
       <section class="block" id="trip-result" hidden aria-live="polite">
         <h2 class="section-title">Your route</h2>
-        <ul id="trip-legs" class="mode-list"></ul>
+        <ol id="trip-steps" class="steps"></ol>
         <h3 class="sub-title">Possible issues on your route</h3>
         <div id="trip-issues"></div>
-        <p class="small">Uses the fewest stops and line changes. It does not plan walking or travel times. STM posts some notices days ahead, so check the date on each one.</p>
+        <p class="small">Picks the nearby métro stations with the least walking and riding (about 2 min a stop, 5 min a line change). Walking distances are straight lines, so the real walk can be longer. STM posts some notices days ahead, so check the date on each one.</p>
       </section>
 
       <section class="block">
@@ -119,6 +119,7 @@
           Metro stations: <a href="https://www.stm.info/en/about/developers">STM GTFS feed</a>
           (<a href="https://www.donneesquebec.ca/recherche/fr/dataset/a0073997-3a02-4c34-8acf-758a2ee950f4">STM on Données Québec</a>), © Société de transport de Montréal.<br>
           Basemap: Esri World Light Gray Canvas, © Esri, HERE, Garmin, © OpenStreetMap contributors.<br>
+          Address search: <a href="https://nominatim.org/">Nominatim</a>, © OpenStreetMap contributors (ODbL).<br>
           Layout inspired by the Morphocode Explorer.
         </p>
       </details>

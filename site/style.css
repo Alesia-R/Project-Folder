@@ -81,6 +81,19 @@ main { flex: 1; min-height: 0; display: flex; }
 .trip-box button:focus-visible, .trip-box input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .stm-alert.notice { border-left-color: #b26b00; background: #fff8ea; }
 .stm-alert.ok { border-left-color: #2e7d32; background: #f1f8f1; }
+.trip-box button:disabled { opacity: .6; cursor: wait; }
+
+/* Your route: numbered directions, a coloured dot for each métro leg */
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.steps li { counter-increment: step; position: relative; padding: 8px 0 8px 34px; border-bottom: 1px solid #ececec; font-size: 13px; }
+.steps li:last-child { border-bottom: 0; }
+.steps li::before { content: counter(step); position: absolute; left: 0; top: 7px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--step-colour, #888); color: #fff; font: 600 12px/22px var(--mono); text-align: center; }
+.steps li.dark-text::before { color: var(--ink); }
+.steps details { margin-top: 4px; }
+.steps summary { min-height: 24px; display: flex; align-items: center; cursor: pointer; font-size: 12px; color: var(--muted); }
+.steps summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.steps .stop-list { margin: 2px 0 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
 
 /* Map panels (I want to... / legend) */
 .panel { background: #fff; padding: 8px 10px; border-radius: 0; line-height: 1.6; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
