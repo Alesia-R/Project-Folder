@@ -404,6 +404,7 @@ function refilter() {
     stationsLayer.addLayer(layer);
   });
   if (metroLayer && map.hasLayer(metroLayer)) { metroLayer.bringToFront(); }   // keep the metro dots drawn on top
+  tripEnds.forEach(function (marker) { marker.bringToFront(); });              // and the trip's start and end dots
   scheduleOverview();
   const shown = stationsLayer.getLayers().length;
   const countEl = document.getElementById('count');
@@ -411,8 +412,8 @@ function refilter() {
   if (waiting) {
     countEl.textContent = allStations.length + ' BIXI stations. Choose your location or a métro station to see them';
   } else if (!isPhone) {
-    countEl.textContent = shown + ' BIXI station' + (shown === 1 ? '' : 's') + ' within ' + selection.radius +
-      ' m of ' + selection.label + (nearOnly ? ' (only those near a metro)' : '');
+    countEl.textContent = shown + ' BIXI station' + (shown === 1 ? '' : 's') + ' within ' + distanceText(selection.radius) +
+      ' of ' + selection.label + (nearOnly ? ' (only those near a metro)' : '');
   } else {
     countEl.textContent = nearOnly
       ? shown + ' of ' + allStations.length + ' stations within ' + walkM + ' m of a metro'
@@ -423,6 +424,8 @@ function refilter() {
 // Draws (or moves) the one circle, shows the BIXI stations inside it and zooms to it.
 function selectArea(latlng, radius, label) {
   selection = { latlng: latlng, radius: radius, label: label };
+  document.querySelector('.radius-box').hidden = false;   // the walking-distance slider appears with the first circle
+  setSliderMax(latlng);                                     // the slider reaches the farthest station from here
   if (selectCircle) {
     selectCircle.setLatLng(latlng).setRadius(radius);
   } else {
@@ -745,9 +748,46 @@ document.getElementById('info-toggle').addEventListener('click', function () {
 
 // ---- Walking distance slider ----------------------------------------------------------------------------
 
+// "3:45" (minutes:seconds) under an hour, "2 h 05" beyond.
 function walkTimeText(metres) {
   const seconds = Math.round(metres / WALK_M_PER_MIN * 60);
+  if (seconds >= 3600) {
+    const minutes = Math.round(seconds / 60);
+    return Math.floor(minutes / 60) + ' h ' + String(minutes % 60).padStart(2, '0');
+  }
   return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+}
+
+// "300 m" or "12.5 km"
+function distanceText(metres) {
+  return metres >= 1000 ? (metres / 1000).toFixed(1).replace(/\.0$/, '') + ' km' : metres + ' m';
+}
+
+// The slider runs from 100 m to the farthest station from the chosen place, spaced proportionally:
+// the left half covers about 100 m to 2 km (short walks stay easy to pick), the right half reaches every station.
+const MIN_WALK_M = 100;
+let maxWalkM = 1500;
+
+function metresFor(position) {
+  const m = MIN_WALK_M * Math.pow(maxWalkM / MIN_WALK_M, position / 1000);
+  const step = m < 1000 ? 50 : m < 10000 ? 100 : 500;
+  return Math.min(maxWalkM, Math.round(m / step) * step);
+}
+
+function positionFor(metres) {
+  return Math.round(1000 * Math.log(metres / MIN_WALK_M) / Math.log(maxWalkM / MIN_WALK_M));
+}
+
+// The farthest BIXI or metro station from this place, rounded up to the next kilometre (at least 1.5 km).
+function setSliderMax(latlng) {
+  let far = 1500;
+  allStations.concat(Object.keys(metroById).map(function (id) { return metroById[id]; })).forEach(function (layer) {
+    far = Math.max(far, map.distance(latlng, layer.getLatLng()));
+  });
+  maxWalkM = Math.ceil(far / 1000) * 1000;
+  walkM = Math.min(walkM, maxWalkM);
+  document.getElementById('walk-slider').value = positionFor(walkM);
+  updateWalkLabels();
 }
 
 function updateWalkLabels() {
@@ -761,15 +801,15 @@ function updateWalkLabels() {
 
 (function setUpSlider() {
   const slider = document.getElementById('walk-slider');
-  slider.value = walkM;
+  slider.value = positionFor(walkM);
   updateWalkLabels();
   slider.addEventListener('input', function () {
-    walkM = Number(slider.value);
+    walkM = metresFor(Number(slider.value));
     updateWalkLabels();
     if (selection) {
       selection.radius = walkM;
       selectCircle.setRadius(walkM);
-      setFindMessage('Showing ' + walkM + ' m around ' + selection.label + '.');
+      setFindMessage('Showing ' + distanceText(walkM) + ' around ' + selection.label + '.');
     }
     if (stationsLayer) { refilter(); }
   });
@@ -864,22 +904,46 @@ function landPatches(center, radius) {
     return [{ category: 'none', poly: circle, areaM2: polygonArea(circle) / (k * k) }].map(toLatLngs);
   }
 
+  // Stations go into grid squares, so each one only compares itself with stations nearby, ring by ring outward.
+  const CELL = 400 * k;
+  const grid = {};
+  let minGX = Infinity, maxGX = -Infinity, minGY = Infinity, maxGY = -Infinity;
+  near.forEach(function (site, i) {
+    site.gx = Math.floor(site.p.x / CELL);
+    site.gy = Math.floor(site.p.y / CELL);
+    (grid[site.gx + ',' + site.gy] = grid[site.gx + ',' + site.gy] || []).push(i);
+    minGX = Math.min(minGX, site.gx); maxGX = Math.max(maxGX, site.gx);
+    minGY = Math.min(minGY, site.gy); maxGY = Math.max(maxGY, site.gy);
+  });
+  const maxRing = Math.max(maxGX - minGX, maxGY - minGY);
+
   const patches = [];
   near.forEach(function (site, i) {
-    const others = near.map(function (o, j) { return { o: o, j: j, d: Math.hypot(o.p.x - site.p.x, o.p.y - site.p.y) }; })
-      .filter(function (x) { return x.j !== i; })
-      .sort(function (a, b) { return a.d - b.d; });
     let cell = circle;
     let maxR = farthest(site.p, cell);
-    for (let n = 0; n < others.length && cell.length >= 3; n++) {
-      const other = others[n];
-      if (other.d > 2 * maxR) { break; }   // too far away to take any of this cell
-      if (other.d === 0) {                 // two stations in the same spot: the first one keeps the land
-        if (other.j < i) { cell = []; }
-        continue;
+    for (let ring = 0; ring <= maxRing && cell.length >= 3; ring++) {
+      if ((ring - 1) * CELL > 2 * maxR) { break; }   // every station from here on is too far away to take any land
+      const ids = [];
+      for (let gx = site.gx - ring; gx <= site.gx + ring; gx++) {
+        for (let gy = site.gy - ring; gy <= site.gy + ring; gy++) {
+          if (Math.max(Math.abs(gx - site.gx), Math.abs(gy - site.gy)) !== ring) { continue; }   // only this ring
+          (grid[gx + ',' + gy] || []).forEach(function (j) { if (j !== i) { ids.push(j); } });
+        }
       }
-      cell = clipCloserTo(cell, site.p, other.o.p);
-      maxR = farthest(site.p, cell);
+      ids.sort(function (a, b) {
+        return Math.hypot(near[a].p.x - site.p.x, near[a].p.y - site.p.y) - Math.hypot(near[b].p.x - site.p.x, near[b].p.y - site.p.y);
+      });
+      for (let n = 0; n < ids.length && cell.length >= 3; n++) {
+        const other = near[ids[n]];
+        const d = Math.hypot(other.p.x - site.p.x, other.p.y - site.p.y);
+        if (d > 2 * maxR) { continue; }   // too far away to take any of this cell
+        if (d === 0) {                    // two stations in the same spot: the first one keeps the land
+          if (ids[n] < i) { cell = []; }
+          continue;
+        }
+        cell = clipCloserTo(cell, site.p, other.p);
+        maxR = farthest(site.p, cell);
+      }
     }
     if (cell.length >= 3) { patches.push({ category: site.category, poly: cell, areaM2: polygonArea(cell) / (k * k) }); }
   });
@@ -913,7 +977,7 @@ function updateOverview() {
   });
 
   const total = categories.reduce(function (sum, cat) { return sum + cat.area; }, 0);
-  document.getElementById('land-area').textContent = (total / 10000).toFixed(2);
+  document.getElementById('land-area').textContent = hectaresText(total);
   const used = categories.filter(function (cat) { return cat.area > 0; });
   drawDonut(used, total);
 
@@ -921,7 +985,7 @@ function updateOverview() {
   const top = document.getElementById('top-modes');
   top.replaceChildren();
   used.slice().sort(function (a, b) { return b.area - a.area; }).forEach(function (cat) {
-    top.appendChild(listItem(cat.colour, cat.label, (cat.area / 10000).toFixed(2) + ' ha'));
+    top.appendChild(listItem(cat.colour, cat.label, hectaresText(cat.area) + ' ha'));
   });
 
   // Right now: what is inside the circle.
@@ -949,6 +1013,11 @@ function updateOverview() {
   now.appendChild(listItem(METRO_LAND, metros.length
     ? 'Métro: ' + metros.map(function (m) { return m.feature.properties.metro_name; }).join(', ')
     : 'Métro stations', metros.length));
+}
+
+// Square metres as hectares with thousands separators: "1,017.15"
+function hectaresText(m2) {
+  return (m2 / 10000).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function listItem(colour, name, value) {
@@ -989,6 +1058,7 @@ function drawDonut(categories, total) {
 
 const TRANSFER_COST = 4;
 let routeLayer;
+let tripEnds = [];       // the start and end dots of the checked trip (click one to explore around it)
 
 function linesAt(id) {
   return Object.keys(lineOrder).filter(function (line) { return lineOrder[line].indexOf(id) > -1; });
@@ -1261,11 +1331,25 @@ function showTrip(from, to) {
       latLngsFor(leg.ids).forEach(function (p) { points.push(p); });
     });
   }
-  [from.latlng, to.latlng].forEach(function (p, n) {
-    L.circleMarker(p, { interactive: false, radius: 7, weight: 3, color: '#ffffff', fillColor: n ? '#c0261f' : '#111111', fillOpacity: 1 })
+  // The two ends are clickable: each opens the walking-distance explorer (circle, land patches, Bixi) around it.
+  tripEnds = [[from, 'Start', '#111111'], [to, 'End', '#c0261f']].map(function (end) {
+    const place = end[0];
+    return L.circleMarker(place.latlng, { radius: 9, weight: 3, color: '#ffffff', fillColor: end[2], fillOpacity: 1 })
+      .bindTooltip(end[1] + ': ' + place.label, { direction: 'top', offset: [0, -8] })
+      .on('click', function () {
+        map.closePopup();
+        selectArea(place.latlng, walkM, place.label);
+        setFindMessage('Showing ' + walkM + ' m around ' + place.label + '.');
+      })
       .addTo(routeLayer);
   });
   map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
+  L.popup({ offset: [0, -8], maxWidth: 240 })
+    .setLatLng(from.latlng)
+    .setContent('<strong>See what is waiting at each end</strong><br>' + (isPhone ? 'Tap' : 'Click') +
+      ' the black start dot or the red end dot ' +
+      'to see the Bixi bikes and free docks within walking distance.')
+    .openOn(map);
 }
 
 function setUpTripCheck(metros) {

@@ -168,3 +168,6 @@ main { flex: 1; min-height: 0; display: flex; }
 
   .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; font-size: 24px; }
 }
+
+/* The slider stays hidden until a place is chosen (beats the phone rule that makes it a flex row) */
+.radius-box[hidden] { display: none; }

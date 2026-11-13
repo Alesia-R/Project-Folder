@@ -168,10 +168,16 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
 
   Claude did not generate or change any data, that was all me. 
 
-  ## Part 3: what I found, and one fix 
+## Part 3: what I found, and one fix 
     Evidence: Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route to somewhere else.” 
     Severity: 2. Slowed them down 
     My change: I would need to add ‘a to b’ group finding for directions.
     Recheck: [the same task, given to someone new, with no help.          
         Fixed means: they do it without hesitating at that spot]
+
+## A4
+- Changed the max view in the scale bar so you can see all of the bixi stations on the island if you want
+- add the monocode explorer on either side of the direction if someone looks it up (at the "to" location and at the "from" location. A popup should say something like "Click on either of your end trip to see bixi avaiability!" -- make that sound better. Also, the scale bar at the top of the side pannel should stay hidden until you click a station.
+
+  
       
