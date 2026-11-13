@@ -75,49 +75,37 @@ bixi-metro-mvp/
 - **What stayed mine:** The idea, the audience, the story text, the 300 m choice, and cutting Twitter scraping from this iteration, the data, the information I put in. 
 
 ## After the demo
-- neighbours answer: It would be nice if there was some way to connect the metro stops into actual lines so that it isnt just random stops. The visualisation would be better. 
-- Today I will fix: I changed the display first and organized them in a way that presents all the stops as connected per line. For example, all greens tops, conencted with a through green line. 
+- **neighbours answer:** It would be nice if there was some way to connect the metro stops into actual lines so that it isnt just random stops. The visualisation would be better. 
+- **Today I will fix:** I changed the display first and organized them in a way that presents all the stops as connected per line. For example, all greens tops, conencted with a through green line. 
 Then, IF the metro station is down, I highlighted them in red, IF multiple sequential stations are down, I made the affected segment red. In the future, I will fix the bus data coming from the API to be connected to a busstop.sph in order to see the radius of metro stops that may also be down.  
 
 ## A3 card with all test cases
-| 1. Cold start | pass / fault: It passed, no red lines. 
+1. Cold start | pass / fault: It passed, no red lines. 
+2. Read every label | 
+  1. de la Gauchetière / St-Alexandre
+  Capacity: 19 docks
+  Nearest metro: Square-Victoria–OACI (Orange), 136 m
+  No live data 
 
-| 2. Read every label | 
-    1. de la Gauchetière / St-Alexandre
-    Capacity: 19 docks
-    Nearest metro: Square-Victoria–OACI (Orange), 136 m
-    No live data 
-
-    Some bixi stations (when grey) read 'no live data' in the popup. It is also in the legend already. 
-
-| 3. Ask twice | No issues. 
-
-| 4. The edge | No issues. 
-
-| 5. The data does not come | I blocked metro_stations.geojson data in Network and my entire map went blank. In the side panel, it just reads "Live STM service status. Loading STM service status..." and the title bar reads "Could not load the station files. Open the console (F12) for details." 
-  The console is reading error "app.js:420 TypeError: Failed to fetch
+  Some bixi stations (when grey) read 'no live data' in the popup. It is also in the legend already. 
+3. Ask twice | No issues. 
+4. The edge | No issues. 
+5. The data does not come | I blocked metro_stations.geojson data in Network and my entire map went blank. In the side panel, it just reads "Live STM service status. Loading STM service status..." and the title bar reads "Could not load the station files. Open the console (F12) for details." 
+The console is reading error "app.js:420 TypeError: Failed to fetch
     at getJSON (app.js:367:10)
     at app.js:373:56" 
-
-    I made a change in app.js so that if the metro file crashes or if the bixi file crashes, instead of reading "Live STM service status
-    Loading STM service status..." in the status bar, the description clearly describes what is happening. 
-
-    The side bar now says "The sidebar says: "STM service status was not checked, because the map could not load its station data. Try reloading the page" if the bixi file fails. 
-
-    If the metro file fails, it reads "Checked at 5:52 PM. The metro station file did not load, so notices are listed here but not shown on the map."
-
-    I took "Open the console (F12) for details" out of the messages, since a commuter won't use it.
-
-| 6. On a phone (size view and my phone) |
+  - I made a change in app.js so that if the metro file crashes or if the bixi file crashes, instead of reading "Live STM service status. Loading STM service status..." in the status bar, the description clearly describes what is happening. 
+  - The side bar now says "The sidebar says: "STM service status was not checked, because the map could not load its station data. Try reloading the page" if the bixi file fails. 
+  - If the metro file fails, it reads "Checked at 5:52 PM. The metro station file did not load, so notices are listed here but not shown on the map."
+  - I took "Open the console (F12) for details" out of the messages, since a commuter won't use it.
+6. On a phone (size view and my phone) |
   The "want to..." and "Bikes available" tabs block the view of the map when it is on a phone. I added two toggle arrows that allows the user to close the tabs in order to see the map better. 
 
     The fold away panels both have a arrow beside their heading. Clicking the heading or the arrow to fold the panel down to just its title, and clickig it again opens it. 
     
     Both use the same small function, collapsiblePanel, and the styles are at the bottom of style.css.
-
-| 7. Mouse in my pocket | No issues. 
-
-| 8. Accessibility audit | 
+7. Mouse in my pocket | No issues. 
+8. Accessibility audit | 
   Scored 96: 
   Red lines read: 
   - "Touch targets do not have sufficient size or spacing." 
@@ -133,7 +121,7 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
   app.js line 198 is the core logic. It keeps only the metro alerts and decides whether each one is a station notice or a line disruption, and works out which station it affects 
   - app.js line 177 and 184 find the affected stations, either from STM stop codes or from station names in the alert text 
   - app.js line 316 turns affected stations and stretches of the metro line red on the map 
-  ## (specifically for the A3 feature)
+**Lines that do the work specifically for the A3 feature** 
   - app.js lines 748-768 are where the slider sets walkM, then resizes the circle and recalculates everything 
   - apps.js line 417 draws the dashes circle, filters the station and zooms to it. It runs for your location (app.js line 665), a metro click andthe search (app.js line 708)
   - app.js lie 830 is the geometry of that circle. It splits the circle between nearby stations so each bit of land belongs to its nearest station, then measures each piece's area in m2
@@ -144,42 +132,46 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
   - I do not yet fully understand how to connect the donut chart to a larger issue of resistance, which is what I was planning to do in the first place. I wonder if I can show a trend of transit-driven gentrification with the donut chart or in another form, since there are obvious pockets of disconnection in certain areas. I wonder if the morpho-code layout is the best way to show this. I also need to connect land-use data to the basemap so that the slider shows blocks/area instead of the shapes. 
 
 ## A3 ai disclosure, written as process
-- I used Claude Code (Claude Opus 5.5, Anthropic) inside VS Code as a coding assistant for A3. The idea, data sources, notebook pipeline and design decisions are mine. Claude wrote most of the new JavaScript and CSS from my instructions. My process:
+I used Claude Code (Claude Opus 5.5, Anthropic) inside VS Code as a coding assistant for A3. The idea, data sources, notebook pipeline and design decisions are mine. Claude wrote most of the new JavaScript and CSS from my instructions. 
 
-  1. Accessibility audit. Lighthouse kept reporting "Touch targets do not have sufficient size or spacing." I asked Claude to diagnose it. It found that the overlapping metro markers were the cause and that Lighthouse was testing a cached copy of my page. It also measured the flagged elements in a headless browser. I decided on the fixes: larger tap areas, round metro dots on desktop, and "M" icons on phones only when zoomed in.
-
-  2. Location and search. I asked for a "use my location" feature, a circle around the chosen place, and a métro station search. I asked Claude to propose a plan before changing anything, and I approved it before any code was written. Claude implemented it, and I chose how the desktop view behaves (no Bixi stations until a place is chosen).
-
-  3. Phone layout. I asked for the map to fill most of the phone screen, a "More information" tab, and closed panels on first load. Claude built these and tested them at iPhone size.
-
-  4. Walking-distance explorer (main A3 feature). I gave Claude a screenshot of the Morphocode Explorer as a reference for layout, colours and type. Claude proposed the design and asked me questions, and I chose:
-   - the donut chart shows share of land
-   - the circle stays empty until a place is chosen
-   - the story text goes in an "About this map" section
-    Claude wrote:
-    - the slider
-    - the land split by nearest station (Voronoi cells cut to the circle)
-    - the area calculations, the donut chart and the panel
-
-  5. Fixes. When Bixi stations stopped being clickable, I reported it and Claude found the cause (one map layer catching all the clicks) and fixed it. I also asked for:
+**My process:**
+1. Accessibility audit. Lighthouse kept reporting "Touch targets do not have sufficient size or spacing." I asked Claude to diagnose it. It found that the overlapping metro markers were the cause and that Lighthouse was testing a cached copy of my page. It also measured the flagged elements in a headless browser. I decided on the fixes: larger tap areas, round metro dots on desktop, and "M" icons on phones only when zoomed in.
+2. Location and search. I asked for a "use my location" feature, a circle around the chosen place, and a métro station search. I asked Claude to propose a plan before changing anything, and I approved it before any code was written. Claude implemented it, and I chose how the desktop view behaves (no Bixi stations until a place is chosen).
+3. Phone layout. I asked for the map to fill most of the phone screen, a "More information" tab, and closed panels on first load. Claude built these and tested them at iPhone size.
+4. Walking-distance explorer (main A3 feature). I gave Claude a screenshot of the Morphocode Explorer as a reference for layout, colours and type. Claude proposed the design and asked me questions, and I chose:
+  - the donut chart shows share of land
+  - the circle stays empty until a place is chosen
+  - the story text goes in an "About this map" section
+  **Claude wrote:**
+  - the slider
+  - the land split by nearest station (Voronoi cells cut to the circle)
+  - the area calculations, the donut chart and the panel
+5. Fixes. When Bixi stations stopped being clickable, I reported it and Claude found the cause (one map layer catching all the clicks) and fixed it. I also asked for:
   - lighter patches, so the streets show through
   - the location message to disappear on phones
   - one monospace font everywhere
   - the map to still show the métro if the Bixi file fails
-  
-  6. Checking. After each change, Claude tested the page in headless Chrome at desktop and phone sizes. It checked for errors, clicked stations and compared the area totals. I reviewed the screenshots and ran Lighthouse and the site on my own phone. I also made some changes myself, including the header colour and moving the STM status section.
+6. Checking. After each change, Claude tested the page in headless Chrome at desktop and phone sizes. It checked for errors, clicked stations and compared the area totals. I reviewed the screenshots and ran Lighthouse and the site on my own phone. I also made some changes myself, including the header colour and moving the STM status section.
 
   Claude did not generate or change any data, that was all me. 
 
 ## Part 3: what I found, and one fix 
 
-Table: 
-![alt text](image.png)
+| # | What they did (evidence) | What I expected | Severity | Fix it? (yes, later, no) |
+| 1 | Looked at the screen and thought they had explored everything on the page, did not realize there was more to look at in the information tab (i.e. the donut scale or the information about the ‘Right now, within 300 m’ legend). They asked “What do the different colours mean? Oh, okay, well the visual hierarchy of this section is not at important as it should be” | For them to be able to find the information naturally. | 3 stopped them completing the task, or led them to a wrong answer | Later.  Move the section up to be more visually important. |
+| 2 | Was confused at the radius of the polygons when zoomed in: said “Why are the shapes shaped the way they are?” when looking at a corner of a bixi polygon that was visible even though the station wasn’t there. Said “instead of the walking distance being isochrone they could be random hexagons” | I expected this to be confusing since this is not what I want in the finished product. For time sake, I separated the land into random polygonal-shapes so that I didn’t have to attach land data yet. | 2 Slowed them down. | Later. It’s a large fix since I want to upload land-use data so that there are sections of land are highlighted instead of random polygons. |
+| 3 | Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route” | I didn’t think of that because I assumed they would only look at the metro they were at, but if a section of it is closed in the direction they are wishing to go then it makes sense. | 2 Slowed them down | Yes, I would need to add ‘a to b’ group finding |
+| 4 | Was looking around on the map and said “the locator box is annoying” | I already had it lasting only 3 seconds before it disappeared, but if you are moving around a lot then it will always be there. I will add a toggle to close. | 1 cosmetic | Later. Add toggle |
+| 5 | Looked at the time and was confused. Said “the seconds don’t really matter since they aren’t uploading currently, and the time is off. It should have a ‘last updated’ instead of ‘updated’” | Did not think of that, didn’t notice it myself. | 1 cosmetic | Later, add “last updated” and remove the seconds from the time |
+| 6 | Was playing around with the radius and said “I wish I could see further out or the whole island” | I thought of this, I will fix it. | 2 Slowed them down | Later. Will have an option to see the stations on the whole island |
+| 7 | On phone confused and said “the ‘more information’ is not so obvious. There is too much on the screen and too much overlapping. The zoom out could have total summary numbers for Bixi stations to have less on the screen” | I thought there might be too much as well. | 2 Slowed them down | Later |
+| 8 | Was trying to find the direction and said “I would like to see integrated bike lanes” so that they would navigate their direction on a bike. | Didn’t think of this but it’s a good point | 1 cosmetic | Later |
+| 9 | Was looking at the screen and had a hard time reading the information: said “I am colour-blind and have a hard time reading the yellow text at the top bar.” | I would not have noticed that, good point. | 2 Slowed them down | Later |
 
-    Evidence: Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route to somewhere else.” They found the navigation easy and could find their place well. 
-    Severity: 2. Slowed them down 
-    My change: Finding 3 - I added a “Check a trip” so that you can identify which direction you will go.  The app will also give you directions to that location, and you can choose either the “from” or to” points on the map to see the radius of Bixi stations; the distance slider in the side bar now stays hidden until something is shown. 
-    Recheck: Checked with TA. 
+**Evidence:** Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route to somewhere else.” They found the navigation easy and could find their place well. 
+**Severity:** 2. Slowed them down 
+**My change:** Finding 3 - I added a “Check a trip” so that you can identify which direction you will go.  The app will also give you directions to that location, and you can choose either the “from” or to” points on the map to see the radius of Bixi stations; the distance slider in the side bar now stays hidden until something is shown. 
+**Recheck:** Checked with TA. 
 
 ## Before:
 No direction, only direct locality from where you are. 
