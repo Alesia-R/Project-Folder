@@ -168,7 +168,7 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
   Claude did not generate or change any data, that was all me. 
 
   ## Part 3: what I found, and one fix 
-    Evidence: Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route” 
+    Evidence: Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route to somewhere else.” 
     Severity: 2. Slowed them down 
     My change: I would need to add ‘a to b’ group finding for directions.
     Recheck: [the same task, given to someone new, with no help.          

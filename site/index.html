@@ -51,6 +51,27 @@
         <p id="find-msg" class="small" aria-live="polite"></p>
       </section>
 
+      <!-- Check a trip: which métro lines and stations an A-to-B trip uses, and the issues on them -->
+      <section class="block trip-box">
+        <h2 class="section-title">Check a trip</h2>
+        <form id="trip-form">
+          <label for="trip-from">From (métro station)</label>
+          <input id="trip-from" list="metro-names" autocomplete="off" placeholder="e.g. Fabre">
+          <label for="trip-to">To (métro station)</label>
+          <input id="trip-to" list="metro-names" autocomplete="off" placeholder="e.g. Atwater">
+          <button type="submit">Check my route</button>
+        </form>
+        <p id="trip-msg" class="small" aria-live="polite"></p>
+      </section>
+
+      <section class="block" id="trip-result" hidden aria-live="polite">
+        <h2 class="section-title">Your route</h2>
+        <ul id="trip-legs" class="mode-list"></ul>
+        <h3 class="sub-title">Possible issues on your route</h3>
+        <div id="trip-issues"></div>
+        <p class="small">Uses the fewest stops and line changes. It does not plan walking or travel times. STM posts some notices days ahead, so check the date on each one.</p>
+      </section>
+
       <section class="block">
         <h2 class="section-title">Transit overview</h2>
         <p id="overview-empty" class="small">Choose your location or a métro station to see the transit around it.</p>

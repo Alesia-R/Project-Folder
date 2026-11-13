@@ -72,7 +72,15 @@ main { flex: 1; min-height: 0; display: flex; }
 .down-text { display: inline; color: #c0261f; }
 .stm-alert { border-left: 3px solid #c0261f; margin: 8px 0; padding: 4px 8px; background: #fff5f5; }
 .stm-alert p { margin: 3px 0; }
-.stm-alert small { color: #444; }
+.stm-alert small { display: block; color: #444; }
+
+/* Check a trip */
+.trip-box label { display: block; margin: 8px 0 4px; font: 12px var(--mono); }
+.trip-box input { box-sizing: border-box; width: 100%; min-height: 32px; padding: 4px 8px; border: 1px solid #888; border-radius: 0; background: #fff; font: inherit; }
+.trip-box button { margin-top: 10px; min-height: 32px; padding: 4px 12px; border: 1px solid var(--ink); border-radius: 0; background: var(--ink); color: #fff; font: inherit; cursor: pointer; }
+.trip-box button:focus-visible, .trip-box input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.stm-alert.notice { border-left-color: #b26b00; background: #fff8ea; }
+.stm-alert.ok { border-left-color: #2e7d32; background: #f1f8f1; }
 
 /* Map panels (I want to... / legend) */
 .panel { background: #fff; padding: 8px 10px; border-radius: 0; line-height: 1.6; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.25); }

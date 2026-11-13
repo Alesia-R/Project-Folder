@@ -211,14 +211,21 @@ function classifyAlert(alert) {
 
   // A station-level alert (closed entrance, works outside, bus terminus moved) is a notice: the station still runs.
   if (!lineLevel) {
-    return { kind: 'notice', title: title, description: description, lines: lines, stations: stations, wholeLine: false };
+    return { kind: 'notice', title: title, description: description, lines: lines, stations: stations, wholeLine: false,
+      until: untilFor(alert) };
   }
   if (!stations.length) {
     const text = normalise(texts);
     lines.forEach(function (line) { stations = stations.concat(stationsFromText(text, line)); });
   }
   return { kind: 'disruption', title: title, description: description, lines: lines, stations: stations,
-    wholeLine: stations.length === 0 };
+    wholeLine: stations.length === 0, until: untilFor(alert) };
+}
+
+// The end of the alert's active period (a Date), or null for "until further notice".
+function untilFor(alert) {
+  const ends = [].concat(alert.active_periods || []).map(function (p) { return Number(p && p.end); }).filter(Boolean);
+  return ends.length ? new Date(Math.max.apply(null, ends) * 1000) : null;
 }
 
 function affects(alert, metroId, stationLines) {
@@ -548,6 +555,7 @@ Promise.all([bixiFile, metroFile])
     addControls();
     addLocateControl();
     setUpFindBox(metros);
+    setUpTripCheck(metros);
     if (bixiMissing) {
       document.getElementById('status').textContent = 'The BIXI station file could not be loaded, so only métro ' +
         'stations and STM service status are shown. Try reloading the page.';
@@ -688,6 +696,15 @@ function addLocateControl() {
   });
 }
 
+// The metro_id whose name matches what was typed (exact first, then partial), or undefined.
+function findMetroId(text) {
+  const typed = normalise(text);
+  const ids = Object.keys(metroById);
+  const nameOf = function (id) { return normalise(metroById[id].feature.properties.metro_name); };
+  return ids.find(function (i) { return nameOf(i) === typed; }) ||
+    ids.find(function (i) { return nameOf(i).indexOf(typed) > -1; });
+}
+
 // The yellow box in the side panel: "Use my location" and the metro station search.
 function setUpFindBox(metros) {
   document.getElementById('find-me').addEventListener('click', startLocate);
@@ -707,12 +724,9 @@ function setUpFindBox(metros) {
 
   form.addEventListener('submit', function (event) {
     event.preventDefault();
-    const typed = normalise(document.getElementById('metro-input').value);
+    const typed = document.getElementById('metro-input').value;
     if (!typed.trim()) { setFindMessage('Type the name of a métro station.'); return; }
-    const ids = Object.keys(metroById);
-    const nameOf = function (id) { return normalise(metroById[id].feature.properties.metro_name); };
-    const id = ids.find(function (i) { return nameOf(i) === typed; }) ||
-      ids.find(function (i) { return nameOf(i).indexOf(typed) > -1; });
+    const id = findMetroId(typed);
     if (!id) { setFindMessage('No métro station matches that name. Pick one from the list.'); return; }
     const layer = metroById[id];
     selectMetro(layer);
@@ -967,4 +981,170 @@ function drawDonut(categories, total) {
   svg.setAttribute('aria-label', 'Share of land by nearest station: ' + categories.map(function (cat) {
     return cat.label + ' ' + Math.round(total ? cat.area / total * 100 : 0) + '%';
   }).join(', '));
+}
+
+// ---- Check a trip: A to B on the métro ----------------------------------------------------------------------
+// Finds the métro route with the fewest stops (a change of line counts as 4 stops), then lists only the STM
+// alerts on that route's lines and stations, and whether there are Bixi bikes at the start and docks at the end.
+
+const TRANSFER_COST = 4;
+let routeLayer;
+
+function linesAt(id) {
+  return Object.keys(lineOrder).filter(function (line) { return lineOrder[line].indexOf(id) > -1; });
+}
+
+function metroName(id) {
+  return metroById[id].feature.properties.metro_name;
+}
+
+// Dijkstra over (station, line) pairs. Returns [{ id, line }, ...] from start to end, or null.
+function metroRoute(fromId, toId) {
+  const cost = {}, prev = {}, done = {};
+  const queue = [];
+  linesAt(fromId).forEach(function (line) { const k = fromId + '|' + line; cost[k] = 0; queue.push(k); });
+  while (queue.length) {
+    queue.sort(function (a, b) { return cost[a] - cost[b]; });
+    const key = queue.shift();
+    if (done[key]) { continue; }
+    done[key] = true;
+    const id = key.split('|')[0], line = key.split('|')[1];
+    if (id === toId) {
+      const path = [];
+      for (let k = key; k; k = prev[k]) { path.unshift({ id: k.split('|')[0], line: k.split('|')[1] }); }
+      return path;
+    }
+    const order = lineOrder[line], i = order.indexOf(id);
+    const next = [order[i - 1], order[i + 1]].filter(Boolean).map(function (n) { return [n + '|' + line, 1]; })
+      .concat(linesAt(id).filter(function (l) { return l !== line; })
+        .map(function (l) { return [id + '|' + l, TRANSFER_COST]; }));
+    next.forEach(function (pair) {
+      const c = cost[key] + pair[1];
+      if (!done[pair[0]] && (cost[pair[0]] === undefined || c < cost[pair[0]])) {
+        cost[pair[0]] = c;
+        prev[pair[0]] = key;
+        queue.push(pair[0]);
+      }
+    });
+  }
+  return null;
+}
+
+// Groups the path into legs: [{ line, ids: [...] }] (a change of line at the same station starts a new leg).
+function routeLegs(path) {
+  const legs = [];
+  path.forEach(function (step) {
+    const last = legs[legs.length - 1];
+    if (last && last.line === step.line) { last.ids.push(step.id); return; }
+    legs.push({ line: step.line, ids: [step.id] });   // first leg, or a change of line at this station
+  });
+  return legs.filter(function (leg) { return leg.ids.length > 1; });
+}
+
+function nearbyBixi(latlng) {
+  const out = { stations: 0, bikes: 0, docks: 0 };
+  allStations.forEach(function (layer) {
+    if (map.distance(latlng, layer.getLatLng()) > walkM) { return; }
+    out.stations += 1;
+    const s = status[layer.feature.properties.station_id];
+    if (s && s.is_installed && s.is_renting) { out.bikes += s.num_bikes_available; out.docks += s.num_docks_available; }
+  });
+  return out;
+}
+
+function untilText(date) {
+  if (!date) { return 'Until further notice'; }
+  const options = { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+  if (date.getFullYear() !== new Date().getFullYear()) { options.year = 'numeric'; }
+  return 'Posted until ' + date.toLocaleString('en-CA', options);
+}
+
+function issueCard(kind, heading, text, small) {
+  const card = document.createElement('article');
+  card.className = 'stm-alert' + (kind === 'disruption' ? '' : ' ' + kind);
+  const title = document.createElement('strong');
+  title.textContent = heading;
+  card.appendChild(title);
+  if (text) { const p = document.createElement('p'); p.textContent = text; card.appendChild(p); }
+  if (small) { const sm = document.createElement('small'); sm.textContent = small; card.appendChild(sm); }
+  return card;
+}
+
+function showTrip(fromId, toId) {
+  const path = metroRoute(fromId, toId);
+  const msg = document.getElementById('trip-msg');
+  if (!path) { msg.textContent = 'No métro route found between those stations.'; return; }
+  const legs = routeLegs(path);
+  const routeIds = new Set(path.map(function (step) { return step.id; }));
+  const routeLines = legs.map(function (leg) { return leg.line; });
+  msg.textContent = '';
+
+  // The legs: "Blue line · Fabre → Jean-Talon · 3 stops"
+  const list = document.getElementById('trip-legs');
+  list.replaceChildren();
+  legs.forEach(function (leg) {
+    list.appendChild(listItem(lineColours[leg.line], leg.line + ' line: ' + metroName(leg.ids[0]) + ' → ' +
+      metroName(leg.ids[leg.ids.length - 1]), (leg.ids.length - 1) + ' stop' + (leg.ids.length === 2 ? '' : 's')));
+  });
+
+  // Only the alerts on this route, named by line or station instead of STM's "Your line" / "Your stop".
+  const issues = document.getElementById('trip-issues');
+  issues.replaceChildren();
+  metroAlerts.forEach(function (alert) {
+    const onRoute = alert.stations.filter(function (id) { return routeIds.has(id); });
+    const lineHit = alert.wholeLine && alert.lines.some(function (line) { return routeLines.indexOf(line) > -1; });
+    if (!onRoute.length && !lineHit) { return; }
+    const where = onRoute.length
+      ? onRoute.map(metroName).join(', ') + (alert.kind === 'notice' ? ' station' : '')
+      : alert.lines.filter(function (line) { return routeLines.indexOf(line) > -1; }).join(', ') + ' line';
+    issues.appendChild(issueCard(alert.kind, (alert.kind === 'disruption' ? 'Disruption: ' : 'Station notice: ') + where,
+      alert.description, untilText(alert.until)));
+  });
+
+  // Bixi at both ends: bikes to start with, docks to finish with.
+  if (!bixiMissing) {
+    const start = nearbyBixi(metroById[fromId].getLatLng());
+    const end = nearbyBixi(metroById[toId].getLatLng());
+    if (!start.bikes) {
+      issues.appendChild(issueCard('notice', 'Bixi: no bikes near ' + metroName(fromId),
+        'No Bixi bikes available within ' + walkM + ' m of the start right now.', ''));
+    }
+    if (!end.docks) {
+      issues.appendChild(issueCard('notice', 'Bixi: no free docks near ' + metroName(toId),
+        'No free Bixi docks within ' + walkM + ' m of the end right now, so you may not be able to return a bike there.', ''));
+    }
+    issues.appendChild(issueCard('ok', 'Bixi backup', null, 'Within ' + walkM + ' m: ' + start.bikes + ' bikes near ' +
+      metroName(fromId) + ', ' + end.docks + ' free docks near ' + metroName(toId) + '.'));
+  }
+  if (!issues.querySelector('.stm-alert:not(.ok)')) {
+    issues.prepend(issueCard('ok', 'No STM disruptions or notices on your route right now.', null, ''));
+  }
+  document.getElementById('trip-result').hidden = false;
+
+  // Highlight the route on the map, under the coloured lines, and zoom to it.
+  if (!routeLayer) { routeLayer = L.layerGroup().addTo(map); }
+  routeLayer.clearLayers();
+  legs.forEach(function (leg) {
+    L.polyline(latLngsFor(leg.ids), { pane: 'selectArea', interactive: false, color: '#111111', weight: 10, opacity: 0.3 })
+      .addTo(routeLayer);
+  });
+  map.fitBounds(L.latLngBounds(latLngsFor(Array.from(routeIds))), { padding: [40, 40] });
+}
+
+function setUpTripCheck(metros) {
+  const form = document.getElementById('trip-form');
+  if (!metros) {
+    form.hidden = true;
+    document.getElementById('trip-msg').textContent = 'The métro station file did not load, so trips cannot be checked.';
+    return;
+  }
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    const msg = document.getElementById('trip-msg');
+    const fromId = findMetroId(document.getElementById('trip-from').value);
+    const toId = findMetroId(document.getElementById('trip-to').value);
+    if (!fromId || !toId) { msg.textContent = 'Pick both stations from the list.'; return; }
+    if (fromId === toId) { msg.textContent = 'Those are the same station.'; return; }
+    showTrip(fromId, toId);
+  });
 }
