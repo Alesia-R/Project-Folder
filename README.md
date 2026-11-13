@@ -2,6 +2,9 @@
 
 GEOG 464, A2 MVP. Alesia Rambure-Keim.
 
+## Render link: https://project-folder-70rt.onrender.com/
+## Github link: https://github.com/Alesia-R/Project-Folder
+
 ## Five sentences
 
 1. **Problem:** Right now the average commuter cannot easily find out whether it is more convenient to take a Bixi or the metro for a short distance, especially when there are delays in service or bikes are running out.
@@ -169,15 +172,28 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
   Claude did not generate or change any data, that was all me. 
 
 ## Part 3: what I found, and one fix 
-    Evidence: Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route to somewhere else.” 
-    Severity: 2. Slowed them down 
-    My change: I would need to add ‘a to b’ group finding for directions.
-    Recheck: [the same task, given to someone new, with no help.          
-        Fixed means: they do it without hesitating at that spot]
 
-## A4
-- Changed the max view in the scale bar so you can see all of the bixi stations on the island if you want
-- add the monocode explorer on either side of the direction if someone looks it up (at the "to" location and at the "from" location. A popup should say something like "Click on either of your end trip to see bixi avaiability!" -- make that sound better. Also, the scale bar at the top of the side pannel should stay hidden until you click a station.
+Table: 
+![alt text](image.png)
+
+    Evidence: Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route to somewhere else.” They found the navigation easy and could find their place well. 
+    Severity: 2. Slowed them down 
+    My change: Finding 3 - I added a “Check a trip” so that you can identify which direction you will go.  The app will also give you directions to that location, and you can choose either the “from” or to” points on the map to see the radius of Bixi stations; the distance slider in the side bar now stays hidden until something is shown. 
+    Recheck: Checked with TA. 
+
+## Before:
+No direction, only direct locality from where you are. 
+![alt text](screenshots:before.png)
+## After:
+Direction to where you are going highlighting the issues that might pop up on your route. 
+![alt text](screenshots:after.png) 
+
+## What I would test next: 
+I would test the radius of the polygons next and integrate land-use data so that the individual plots of the Bixi stations are highlighted instead of random polygons. 
+
+## Next for A4 (early changes): 
+- I changed the max view in the scale bar so you can see all of the bixi stations on the island if you want. It now goes past the 1.5km radius (original) and lets you view the entire island. 
+- Added the monocode explorer on either side of the direction if someone looks it up. It is now at the "to" location and at the "from" location. A popup should say "See what is waiting at each end. Click the black start dot or the red end dot to see the Bixi bikes and free docks within walking distance." 
 
   
       
