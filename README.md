@@ -82,12 +82,12 @@ Then, IF the metro station is down, I highlighted them in red, IF multiple seque
 ## A3 card with all test cases
 1. Cold start | pass / fault: It passed, no red lines. 
 2. Read every label | 
-  1. de la Gauchetière / St-Alexandre
+  de la Gauchetière / St-Alexandre
   Capacity: 19 docks
   Nearest metro: Square-Victoria–OACI (Orange), 136 m
   No live data 
-
-  Some bixi stations (when grey) read 'no live data' in the popup. It is also in the legend already. 
+  
+  - Some bixi stations (when grey) read 'no live data' in the popup. It is also in the legend already. 
 3. Ask twice | No issues. 
 4. The edge | No issues. 
 5. The data does not come | I blocked metro_stations.geojson data in Network and my entire map went blank. In the side panel, it just reads "Live STM service status. Loading STM service status..." and the title bar reads "Could not load the station files. Open the console (F12) for details." 
@@ -158,6 +158,7 @@ I used Claude Code (Claude Opus 5.5, Anthropic) inside VS Code as a coding assis
 ## Part 3: what I found, and one fix 
 
 | # | What they did (evidence) | What I expected | Severity | Fix it? (yes, later, no) |
+|---|---|---|---|---|
 | 1 | Looked at the screen and thought they had explored everything on the page, did not realize there was more to look at in the information tab (i.e. the donut scale or the information about the ‘Right now, within 300 m’ legend). They asked “What do the different colours mean? Oh, okay, well the visual hierarchy of this section is not at important as it should be” | For them to be able to find the information naturally. | 3 stopped them completing the task, or led them to a wrong answer | Later.  Move the section up to be more visually important. |
 | 2 | Was confused at the radius of the polygons when zoomed in: said “Why are the shapes shaped the way they are?” when looking at a corner of a bixi polygon that was visible even though the station wasn’t there. Said “instead of the walking distance being isochrone they could be random hexagons” | I expected this to be confusing since this is not what I want in the finished product. For time sake, I separated the land into random polygonal-shapes so that I didn’t have to attach land data yet. | 2 Slowed them down. | Later. It’s a large fix since I want to upload land-use data so that there are sections of land are highlighted instead of random polygons. |
 | 3 | Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route” | I didn’t think of that because I assumed they would only look at the metro they were at, but if a section of it is closed in the direction they are wishing to go then it makes sense. | 2 Slowed them down | Yes, I would need to add ‘a to b’ group finding |
@@ -169,9 +170,12 @@ I used Claude Code (Claude Opus 5.5, Anthropic) inside VS Code as a coding assis
 | 9 | Was looking at the screen and had a hard time reading the information: said “I am colour-blind and have a hard time reading the yellow text at the top bar.” | I would not have noticed that, good point. | 2 Slowed them down | Later |
 
 **Evidence:** Tried to find out where they were asked to go, said “im not sure what part of the metro would be closed for my route to somewhere else.” They found the navigation easy and could find their place well. 
+
 **Severity:** 2. Slowed them down 
+
 **My change:** Finding 3 - I added a “Check a trip” so that you can identify which direction you will go.  The app will also give you directions to that location, and you can choose either the “from” or to” points on the map to see the radius of Bixi stations; the distance slider in the side bar now stays hidden until something is shown. 
-**Recheck:** Checked with TA. 
+
+**Recheck:** Checked with TA. They got stuck when asked to find the nearest bixi stations from their start/stop point, but then they read the pop-up and it made sense. 
 
 ## Before:
 No direction, only direct locality from where you are. 
