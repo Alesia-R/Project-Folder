@@ -11,7 +11,7 @@ GEOG 464, A2 MVP. Alesia Rambure-Keim.
 2. **Audience:** The average commuter, especially in high-density areas where many types of transport come together.
 3. **Core action:** A commuter can see, right now, whether there are Bixi bikes (or free docks) at the stations within a 4-minute walk of their metro station.
 4. **Data:** BIXI's open GBFS feed (station locations, and live bikes and docks), and the STM's GTFS feed (the 68 metro stations and their lines).
-5. **Not a routing app:** the idea is real-time availability and service status for short distances, faster to read than opening both the transit app and the Bixi app.
+5. **Not a routing app:** This is not another routing app, but it can plan your trip. It does not show bus routes; it shows live availability and STM service notices for short distances so you can decide. Any other form of transportation is outside the scope of this tool.
 
 ## Folder
 
