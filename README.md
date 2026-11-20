@@ -191,4 +191,13 @@ I would test the radius of the polygons next and integrate land-use data so that
 - I changed the max view in the scale bar so you can see all of the bixi stations on the island if you want. It now goes past the 1.5km radius (original) and lets you view the entire island. 
 - Added the monocode explorer on either side of the direction if someone looks it up. It is now at the "to" location and at the "from" location. A popup should say "See what is waiting at each end. Click the black start dot or the red end dot to see the Bixi bikes and free docks within walking distance." 
 
-##    
+## A4 
+**What my map remembers:**
+- What it remembers and why it suits my reader (one or two sentences) 
+My map remembers if there are bixi dock problems (broken, always full or empty), Métro elevator or escalator that are out of service, or if there are unsafe or blocked bike routes in the city. It suits my reader because it allows them to see if there are any other disturbances that may affect their trip without relying on the Métro API or "official" forms of information, it is more community based and may highlight other types of alerts. 
+- Where it is kept: personal (in the readers own browser, on their devices; nobody else seens it) or shared (firebase, the region your chose, and when you will delete it)
+
+- How the reader clears it (delete a point, reset view, remove a favourite, or clear the sites data in their browser) 
+The reader clears their own point by selecting the option to delete it (it gives an option) or by 
+- which file does the work, and one thing you understand about how it works, in your own words (A4 will ask this) 
+The memory.js file is the file that does all of the 'remembering' work. Your web app's Firebase configuration 
