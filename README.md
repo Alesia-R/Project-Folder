@@ -191,5 +191,4 @@ I would test the radius of the polygons next and integrate land-use data so that
 - I changed the max view in the scale bar so you can see all of the bixi stations on the island if you want. It now goes past the 1.5km radius (original) and lets you view the entire island. 
 - Added the monocode explorer on either side of the direction if someone looks it up. It is now at the "to" location and at the "from" location. A popup should say "See what is waiting at each end. Click the black start dot or the red end dot to see the Bixi bikes and free docks within walking distance." 
 
-  
-      
+##    

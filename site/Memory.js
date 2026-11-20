@@ -20,15 +20,17 @@
 const MEMORY = {
   // What a reader can add. Colour plus words, never colour alone.
   categories: {
-    seen:    { label: "I saw this here",       colour: "#1f77b4" },
-    problem: { label: "Something is wrong",    colour: "#d95f02" },
-    idea:    { label: "Idea or suggestion",    colour: "#1b9e77" }
+    // Colours chosen to stay clear of the map's own blues (métro), oranges (Bixi) and métro line colours,
+    // and dark enough to stand out on the Esri light grey basemap.
+    dock:     { label: "Bixi dock problem (broken, always full or empty)", colour: "#6a3d9a" },  // purple
+    access:   { label: "Métro elevator or escalator out",                  colour: "#c51b7d" },  // magenta
+    bikepath: { label: "Unsafe or blocked bike route",                     colour: "#01665e" }   // dark teal
   },
   maxNote: 80,                       // characters
   // Where points may go: south, north, west, east. null means anywhere.
-  bounds: null,                      // e.g. { south: 45.40, north: 45.60, west: -73.75, east: -73.45 }
+  bounds: { south: 45.40, north: 45.72, west: -73.98, east: -73.40 },   // Montréal, Laval and Longueuil (Bixi area)
   storageKey: null,                  // personal route: null gives each page folder its own notebook
-  position: "topright",              // where the panel sits: topright, topleft, bottomright, bottomleft
+  position: "bottomleft",            // the only free corner: zoom/locate are top left, bike toggle top right, legend bottom right
   collection: "points",              // shared route: the Firestore collection name
   // Shared route only: paste your Firebase web config here. Leave apiKey as PASTE for the personal route.
   firebaseConfig: {
@@ -53,16 +55,22 @@ function addMemory(map) {
   let fb = null;         // Firebase functions, shared route only
 
   // ---------- a small panel on the map ----------
+  // Starts as a round "Add a point" button; pressing it opens the full panel. Styles are in style.css (.memory-...).
   const Panel = L.Control.extend({
     onAdd() {
-      const box = L.DomUtil.create("div", "memory-panel");
-      box.style.cssText = "background:#fff;padding:8px 10px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.35);font:14px Arial,sans-serif;max-width:230px";
+      const box = L.DomUtil.create("div", "memory");
       box.innerHTML =
-        '<button type="button" data-m="add" style="width:100%;min-height:40px;font-weight:bold;cursor:pointer">Add a point</button>' +
-        '<div data-m="status" role="status" style="margin:6px 0">Loading...</div>' +
-        '<ul data-m="legend" style="list-style:none;margin:0 0 6px;padding:0"></ul>' +
-        '<button type="button" data-m="export" style="width:100%;cursor:pointer">Download points (GeoJSON)</button>';
+        '<button type="button" data-m="open" class="memory-dot" aria-expanded="false" aria-controls="memory-body">Add a point</button>' +
+        '<div data-m="body" id="memory-body" class="panel memory-panel" hidden>' +
+          '<div class="memory-head"><strong>Add to the map</strong>' +
+            '<button type="button" data-m="close" class="memory-close" aria-label="Close">&times;</button></div>' +
+          '<button type="button" data-m="add" class="memory-add">Add a point</button>' +
+          '<p data-m="status" role="status" class="memory-status">Loading...</p>' +
+          '<ul data-m="legend" class="memory-legend legend"></ul>' +
+          '<button type="button" data-m="export" class="memory-export">Download points (GeoJSON)</button>' +
+        '</div>';
       L.DomEvent.disableClickPropagation(box);
+      L.DomEvent.disableScrollPropagation(box);
       return box;
     }
   });
@@ -71,11 +79,22 @@ function addMemory(map) {
   for (const c of Object.values(MEMORY.categories)) {
     const li = document.createElement("li");
     const sw = document.createElement("span");
-    sw.style.cssText = "display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;background:" + c.colour;
+    sw.style.background = c.colour;
     li.append(sw, document.createTextNode(c.label));
     $("legend").append(li);
   }
   function status(text) { $("status").textContent = text; }
+
+  // Open and close: the circle and the full panel swap places.
+  function setOpen(open) {
+    $("open").hidden = open;
+    $("open").setAttribute("aria-expanded", String(open));
+    $("body").hidden = !open;
+    if (!open && adding) setAdding(false);
+    (open ? $("add") : $("open")).focus();
+  }
+  $("open").addEventListener("click", () => setOpen(true));
+  $("close").addEventListener("click", () => setOpen(false));
 
   function draw() {
     layer.clearLayers();
@@ -195,6 +214,7 @@ function addMemory(map) {
 
   function openForm(latlng) {
     const form = document.createElement("form");
+    form.className = "memory-form";
     const sel = document.createElement("select");
     sel.setAttribute("aria-label", "What kind of point?");
     for (const [k, c] of Object.entries(MEMORY.categories)) {
@@ -202,7 +222,6 @@ function addMemory(map) {
     }
     const inp = document.createElement("input");
     inp.maxLength = MEMORY.maxNote; inp.placeholder = "Short note, no names"; inp.setAttribute("aria-label", "Short note");
-    inp.style.cssText = "display:block;margin:6px 0;width:100%";
     const ok = document.createElement("button"); ok.type = "submit"; ok.textContent = "Save";
     form.append(sel, inp, ok);
     form.addEventListener("submit", (ev) => { ev.preventDefault(); map.closePopup(); add(latlng.lat, latlng.lng, sel.value, inp.value); });
