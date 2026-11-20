@@ -196,8 +196,8 @@ I would test the radius of the polygons next and integrate land-use data so that
 - What it remembers and why it suits my reader (one or two sentences) 
 My map remembers if there are bixi dock problems (broken, always full or empty), Métro elevator or escalator that are out of service, or if there are unsafe or blocked bike routes in the city. It suits my reader because it allows them to see if there are any other disturbances that may affect their trip without relying on the Métro API or "official" forms of information, it is more community based and may highlight other types of alerts. 
 - Where it is kept: personal (in the readers own browser, on their devices; nobody else seens it) or shared (firebase, the region your chose, and when you will delete it)
-
+My readers points are kept in Firestore, inside my project a4-geog464-rambure. They are not saved in each readers browser because the information is public. 
 - How the reader clears it (delete a point, reset view, remove a favourite, or clear the sites data in their browser) 
-The reader clears their own point by selecting the option to delete it (it gives an option) or by 
-- which file does the work, and one thing you understand about how it works, in your own words (A4 will ask this) 
-The memory.js file is the file that does all of the 'remembering' work. Your web app's Firebase configuration 
+The reader clears their own point by selecting the option to delete it (it gives an option). The reader loses that ability is they change browsers. 
+- Which file does the work, and one thing you understand about how it works, in your own words (A4 will ask this) 
+The memory.js file is the file that does all of the 'remembering' work, and it reads and writes the cloud database. 
