@@ -3,8 +3,9 @@
 
 // On phones, start zoomed in on downtown so the metro markers do not overlap (touch targets, WCAG 2.5.8).
 const isPhone = window.matchMedia('(max-width: 700px)').matches;
+const START_VIEW = isPhone ? { center: [45.505, -73.57], zoom: 14 } : { center: [45.52, -73.6], zoom: 12 };
 const map = L.map('map', { preferCanvas: true })
-  .setView(isPhone ? [45.505, -73.57] : [45.52, -73.6], isPhone ? 14 : 12);
+  .setView(START_VIEW.center, START_VIEW.zoom);
 // Panes, bottom to top: coloured land patches, the dashed circle, metro lines, place labels, then the dots.
 // None of them take clicks, so the BIXI and metro dots (in the overlay pane above) stay clickable.
 [['patches', 330], ['selectArea', 340], ['labels', 360]].forEach(function (pane) {
@@ -23,6 +24,16 @@ L.tileLayer(ESRI_GRAY + 'World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
 L.tileLayer(ESRI_GRAY + 'World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
   maxZoom: 19, maxNativeZoom: 16, pane: 'labels'
 }).addTo(map);
+
+// Phones: the map credits wrap across the whole bottom of the map, so the bottom-left corner ("Add a point")
+// is lifted by their height (kept up to date as they wrap). style.css uses --credits-h on phones only.
+(function liftAboveCredits() {
+  const credits = map.attributionControl && map.attributionControl.getContainer();
+  if (!credits || !window.ResizeObserver) { return; }
+  new ResizeObserver(function () {
+    map.getContainer().style.setProperty('--credits-h', credits.offsetHeight + 'px');
+  }).observe(credits);
+})();
 
 const STATUS_URL = 'https://gbfs.velobixi.com/gbfs/en/station_status.json';
 const REFRESH_MS = 60 * 1000;   // GBFS updates often; once a minute is plenty
@@ -618,7 +629,7 @@ function addControls() {
   };
   toggle.addTo(map);
 
-  const legend = L.control({ position: 'bottomright' });
+  const legend = L.control({ position: 'topright' });   // added after "I want to...", so it sits right below it
   legend.onAdd = function () {
     return collapsiblePanel('panel legend', '<strong id="legend-title">Bikes available</strong>',
       classes.map(function (c) {
@@ -635,19 +646,11 @@ function addControls() {
   legend.addTo(map);
 }
 
-// Messages about finding a place go to the map button and to the yellow box in the side panel.
-let locateDot, locateMsg;
+// Messages about finding a place go to the yellow box in the side panel (not over the map, so the view stays clear).
+let locateDot;
 
-let locateMsgTimer;
-
-// On phones the message beside the map button disappears after 4 seconds, so it does not cover the map.
-// (It stays in the side panel under "More information".)
 function setFindMessage(text) {
-  [locateMsg, document.getElementById('find-msg')].forEach(function (el) { if (el) { el.textContent = text; } });
-  if (isPhone && locateMsg) {
-    clearTimeout(locateMsgTimer);
-    locateMsgTimer = setTimeout(function () { locateMsg.textContent = ''; }, 4000);
-  }
+  document.getElementById('find-msg').textContent = text;
 }
 
 function startLocate() {
@@ -665,9 +668,14 @@ function addLocateControl() {
       '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">' +
       '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/>' +
       '<path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>' +
-      '<p class="locate-msg" aria-live="polite"></p>';
-    locateMsg = div.querySelector('.locate-msg');
-    div.querySelector('button').addEventListener('click', startLocate);
+      // "Refresh": a circular arrow; puts the map back to how it was when the page opened.
+      '<button type="button" class="locate-button refresh-button" title="Refresh: back to the starting view" ' +
+      'aria-label="Refresh the map: clear the chosen place and route and go back to the starting view">' +
+      '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg></button>';
+    div.querySelector('.locate-button:not(.refresh-button)').addEventListener('click', startLocate);
+    div.querySelector('.refresh-button').addEventListener('click', resetMap);
     L.DomEvent.disableClickPropagation(div);
     return div;
   };
@@ -818,6 +826,36 @@ function updateWalkLabels() {
     if (selection) { map.fitBounds(selection.latlng.toBounds(walkM * 2), { padding: [20, 20] }); }
   });
 })();
+
+// ---- "Refresh" button (beside "Show my location"): back to how the map looked when it was first opened ------
+const START_WALK_M = walkM;
+const START_MAX_WALK_M = maxWalkM;
+
+function resetMap() {
+  selection = null;
+  if (selectCircle) { map.removeLayer(selectCircle); selectCircle = null; }
+  if (routeLayer) { routeLayer.clearLayers(); }
+  tripEnds = [];
+  if (locateDot) { map.removeLayer(locateDot); locateDot = undefined; }
+  map.closePopup();
+
+  // The side panel: hide the slider and the route, empty the messages and the search boxes.
+  document.querySelector('.radius-box').hidden = true;
+  document.getElementById('trip-result').hidden = true;
+  setFindMessage('');
+  if (!document.getElementById('trip-form').hidden) { document.getElementById('trip-msg').textContent = ''; }
+  ['metro-input', 'trip-from', 'trip-to'].forEach(function (id) { document.getElementById(id).value = ''; });
+
+  // The walking distance goes back to its first value.
+  maxWalkM = START_MAX_WALK_M;
+  walkM = START_WALK_M;
+  document.getElementById('walk-slider').value = positionFor(walkM);
+  updateWalkLabels();
+
+  if (stationsLayer) { refilter(); } else { scheduleOverview(); }
+  map.setView(START_VIEW.center, START_VIEW.zoom);
+  setFindMessage('The map is back to where it started.');
+}
 
 // ---- Coloured land patches, donut and lists ----------------------------------------------------------------
 // Inside the circle, each bit of land belongs to its nearest station (a Voronoi cell, cut to the circle).
